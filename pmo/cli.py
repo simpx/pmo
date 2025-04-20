@@ -215,10 +215,17 @@ def handle_list(manager: ServiceManager) -> bool:
         
         # Get CPU and memory usage stats
         cpu_mem_stats = {}
+        gpu_stats = {"gpu_memory": "-", "gpu_bus_id": "-"}
         if is_running:
             stats = manager.get_process_stats(name)
             cpu_mem_stats["cpu"] = manager.format_cpu_percent(stats["cpu_percent"])
             cpu_mem_stats["memory"] = manager.format_memory(stats["memory_mb"], stats["memory_percent"])
+            
+            # 获取 GPU 信息
+            if stats.get("gpu_memory"):
+                gpu_stats["gpu_memory"] = stats["gpu_memory"]
+            if stats.get("gpu_bus_id"):
+                gpu_stats["gpu_bus_id"] = stats["gpu_bus_id"]
         else:
             cpu_mem_stats["cpu"] = "0%"
             cpu_mem_stats["memory"] = "0b"
@@ -233,6 +240,8 @@ def handle_list(manager: ServiceManager) -> bool:
             "uptime": uptime,
             "cpu": cpu_mem_stats["cpu"],
             "memory": cpu_mem_stats["memory"],
+            "gpu_memory": gpu_stats["gpu_memory"],
+            "gpu_bus_id": gpu_stats["gpu_bus_id"],
             "restarts": str(restarts_count)
         })
     

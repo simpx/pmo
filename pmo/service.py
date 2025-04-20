@@ -10,6 +10,8 @@ import time
 import psutil
 from pathlib import Path
 from datetime import datetime
+import re
+import shutil
 from typing import Dict, Union, List, Optional, Any, Tuple
 
 from pmo.logs import console
@@ -382,12 +384,121 @@ class ServiceManager:
                 # 计算内存使用百分比
                 stats["memory_percent"] = process.memory_percent()
                 
+                # 获取GPU信息 - 从进程树中获取所有进程
+                gpu_stats = self.get_gpu_stats_for_process_tree(pid)
+                stats.update(gpu_stats)
+                
                 return stats
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 # 如果进程已不存在或无法访问，返回默认值
                 pass
                 
         return stats
+    
+    def get_process_tree(self, pid: int) -> List[int]:
+        """获取进程及其所有子进程的PID列表"""
+        try:
+            process = psutil.Process(pid)
+            children = process.children(recursive=True)
+            return [pid] + [child.pid for child in children]
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return [pid]
+    
+    def get_gpu_stats_for_process_tree(self, pid: int) -> Dict[str, Any]:
+        """获取进程树中所有进程的GPU使用情况"""
+        result = {
+            "gpu_memory": None,
+            "gpu_bus_id": None
+        }
+        
+        # 首先检查是否有pynvml库
+        try:
+            import pynvml
+            return self._get_gpu_stats_pynvml(pid)
+        except ImportError:
+            # 如果没有pynvml，回退到nvidia-smi命令
+            pass
+        
+        try:
+            # 获取进程树中的所有PID
+            process_tree_pids = self.get_process_tree(pid)
+            
+            # 检查nvidia-smi命令是否存在
+            if not self._is_command_available("nvidia-smi"):
+                logger.warning("nvidia-smi command not available")
+                return result
+            
+            # 使用nvidia-smi获取GPU信息
+            cmd = ["nvidia-smi", "--query-compute-apps=pid,gpu_name,used_memory,gpu_bus_id", "--format=csv"]
+            output = subprocess.check_output(cmd, universal_newlines=True)
+            
+            # 解析输出
+            lines = output.strip().split('\n')[1:]  # Skip header line
+            for line in lines:
+                parts = line.split(', ')
+                if len(parts) >= 4:
+                    try:
+                        process_pid = int(parts[0].strip())
+                        if process_pid in process_tree_pids:
+                            result["gpu_memory"] = parts[2].strip()
+                            result["gpu_bus_id"] = parts[3].strip()
+                            break
+                    except (ValueError, IndexError):
+                        continue
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            logger.debug(f"Error getting GPU stats: {str(e)}")
+        
+        return result
+    
+    def _get_gpu_stats_pynvml(self, pid: int) -> Dict[str, Any]:
+        """使用pynvml获取GPU信息"""
+        import pynvml
+        result = {
+            "gpu_memory": None,
+            "gpu_bus_id": None
+        }
+        
+        try:
+            # 初始化NVML库
+            pynvml.nvmlInit()
+            
+            # 获取进程树
+            process_tree_pids = self.get_process_tree(pid)
+            
+            # 获取设备数量
+            device_count = pynvml.nvmlDeviceGetCount()
+            
+            # 遍历每个GPU设备
+            for i in range(device_count):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+                
+                # 获取进程信息
+                processes = pynvml.nvmlDeviceGetComputeRunningProcesses(handle)
+                
+                for process in processes:
+                    if process.pid in process_tree_pids:
+                        # 将内存从字节转换为MB
+                        memory_mb = process.usedGpuMemory / (1024 * 1024)
+                        result["gpu_memory"] = f"{int(memory_mb)} MiB"
+                        
+                        # 获取GPU总线ID
+                        bus_id = pynvml.nvmlDeviceGetPciInfo(handle).busId
+                        if isinstance(bus_id, bytes):
+                            bus_id = bus_id.decode('utf-8')
+                        result["gpu_bus_id"] = bus_id
+                        break
+            
+            # 关闭NVML
+            pynvml.nvmlShutdown()
+            
+        except Exception as e:
+            logger.debug(f"Error getting GPU stats using pynvml: {str(e)}")
+            
+        return result
+    
+    def _is_command_available(self, cmd: str) -> bool:
+        """检查命令是否可用"""
+        return shutil.which(cmd) is not None
     
     def format_cpu_percent(self, cpu_percent: Optional[float]) -> str:
         """格式化 CPU 使用百分比"""
@@ -410,6 +521,12 @@ class ServiceManager:
             
         # 否则显示为 MB
         return f"{int(memory_mb)}mb"
+
+    def format_gpu_memory(self, gpu_memory: Optional[str]) -> str:
+        """格式化GPU内存使用"""
+        if gpu_memory is None:
+            return "0"
+        return gpu_memory
 
     def get_restarts_count(self, service_name: str) -> int:
         """获取服务重启次数"""
