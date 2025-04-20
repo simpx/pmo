@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Command-line interface for PMO process manager.
-使用Rich库进行终端输出格式化
+Using Rich library for formatted terminal output
 """
 import os
 import sys
@@ -18,10 +18,10 @@ from rich.logging import RichHandler
 from rich.traceback import install
 from rich.markup import escape
 
-# 安装Rich的异常格式化器
+# Install Rich exception formatter
 install()
 
-# 配置Rich日志处理
+# Configure Rich logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(message)s",
@@ -32,150 +32,150 @@ logging.basicConfig(
 logger = logging.getLogger("pmo")
 
 def setup_arg_parser() -> argparse.ArgumentParser:
-    """设置命令行参数解析器"""
+    """Set up command line argument parser"""
     parser = argparse.ArgumentParser(
         description=f"{Emojis.SERVICE} PMO - Modern process manager",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
-    # 全局参数
+    # Global parameters
     parser.add_argument('-f', '--config', 
-                      help='配置文件路径 (默认: pmo.yml)',
+                      help='Config file path (default: pmo.yml)',
                       default='pmo.yml')
     
-    subparsers = parser.add_subparsers(dest='command', help='要执行的命令')
+    subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
-    # Start 命令
-    start_parser = subparsers.add_parser('start', help=f'{Emojis.START} 启动服务')
+    # Start command
+    start_parser = subparsers.add_parser('start', help=f'{Emojis.START} Start services')
     start_parser.add_argument('service', nargs='?', default='all', 
-                            help='服务名称或 "all" 启动所有服务')
+                            help='Service name or "all" to start all services')
     start_parser.add_argument('--dryrun', action='store_true',
-                            help='显示将要执行的命令但不实际执行')
+                            help='Show commands to execute without running them')
     
-    # Stop 命令
-    stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} 停止服务')
+    # Stop command
+    stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} Stop services')
     stop_parser.add_argument('service', nargs='?', default='all',
-                           help='服务名称或 "all" 停止所有服务')
+                           help='Service name or "all" to stop all services')
     
-    # Restart 命令
-    restart_parser = subparsers.add_parser('restart', help=f'{Emojis.RESTART} 重启服务')
+    # Restart command
+    restart_parser = subparsers.add_parser('restart', help=f'{Emojis.RESTART} Restart services')
     restart_parser.add_argument('service', nargs='?', default='all',
-                              help='服务名称或 "all" 重启所有服务')
+                              help='Service name or "all" to restart all services')
     
-    # Log 命令
-    log_parser = subparsers.add_parser('log', help=f'{Emojis.LOG} 查看服务日志')
+    # Log command
+    log_parser = subparsers.add_parser('log', help=f'{Emojis.LOG} View service logs')
     log_parser.add_argument('service', nargs='?', default='all',
-                          help='服务名称或 "all" 查看所有日志')
+                          help='Service name or "all" to view all logs')
     log_parser.add_argument('--no-follow', '-n', action='store_true',
-                          help='不实时跟踪日志')
+                          help='Do not follow logs in real-time')
     log_parser.add_argument('--lines', '-l', type=int, default=10,
-                          help='初始显示的行数')
+                          help='Number of lines to show initially')
     
-    # LS 命令 (替代原 PS 命令)
-    ls_parser = subparsers.add_parser('ls', help='列出服务')
+    # LS command (replaces original PS command)
+    ls_parser = subparsers.add_parser('ls', help='List services')
     
     return parser
 
 def handle_start(manager: ServiceManager, service_name: str, dryrun: bool = False) -> bool:
-    """处理启动命令"""
+    """Handle start command"""
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
-            print_warning("配置中没有定义任何服务。")
+            print_warning("No services defined in config.")
             return False
         
         if dryrun:
-            console.print(f"{Emojis.INFO} 以下是将要执行的命令（不会实际执行）:", style="running")
+            console.print(f"{Emojis.INFO} Commands to execute (dry run):", style="running")
         else:
-            console.print(f"{Emojis.START} 正在启动所有服务...", style="running")
+            console.print(f"{Emojis.START} Starting all services...", style="running")
             
         success = True
         for name in service_names:
             if not manager.start(name, dryrun=dryrun):
-                print_error(f"启动服务 '{name}' 失败")
+                print_error(f"Failed to start '{name}'")
                 success = False
             else:
                 if not dryrun:
-                    print_success(f"服务 '{name}' 已成功启动")
+                    print_success(f"Service '{name}' started")
         
         if success and not dryrun:
-            print_success("所有服务已成功启动！")
+            print_success("All services started successfully!")
         elif not success:
-            print_warning("有些服务启动失败，请检查日志获取详情。")
+            print_warning("Some services failed to start, check logs for details.")
         
         return success
     else:
         result = manager.start(service_name, dryrun=dryrun)
         if result and not dryrun:
-            print_success(f"服务 '{service_name}' 已成功启动")
+            print_success(f"Service '{service_name}' started")
         elif not result:
-            print_error(f"启动服务 '{service_name}' 失败")
+            print_error(f"Failed to start '{service_name}'")
         return result
 
 def handle_stop(manager: ServiceManager, service_name: str) -> bool:
-    """处理停止命令"""
+    """Handle stop command"""
     if service_name == 'all':
         service_names = manager.get_running_services()
         if not service_names:
-            console.print(f"{Emojis.INFO} 当前没有正在运行的服务。", style="dim")
+            console.print(f"{Emojis.INFO} No services are running.", style="dim")
             return True
         
-        console.print(f"{Emojis.STOP} 正在停止所有服务...", style="warning")
+        console.print(f"{Emojis.STOP} Stopping all services...", style="warning")
         success = True
         for name in service_names:
             if not manager.stop(name):
-                print_error(f"停止服务 '{name}' 失败")
+                print_error(f"Failed to stop '{name}'")
                 success = False
             else:
-                console.print(f"{Emojis.STOPPED} 服务 '{name}' 已停止", style="stopped")
+                console.print(f"{Emojis.STOPPED} Service '{name}' stopped", style="stopped")
         
         if success:
-            console.print(f"\n{Emojis.STOPPED} 所有服务已成功停止！", style="warning")
+            console.print(f"\n{Emojis.STOPPED} All services stopped successfully!", style="warning")
         else:
-            print_warning("有些服务停止失败，请检查日志获取详情。")
+            print_warning("Some services failed to stop, check logs for details.")
         
         return success
     else:
         result = manager.stop(service_name)
         if result:
-            console.print(f"{Emojis.STOPPED} 服务 '{service_name}' 已成功停止", style="warning")
+            console.print(f"{Emojis.STOPPED} Service '{service_name}' stopped", style="warning")
         else:
-            print_error(f"停止服务 '{service_name}' 失败")
+            print_error(f"Failed to stop '{service_name}'")
         return result
 
 def handle_restart(manager: ServiceManager, service_name: str) -> bool:
-    """处理重启命令"""
+    """Handle restart command"""
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
-            print_warning("配置中没有定义任何服务。")
+            print_warning("No services defined in config.")
             return False
         
-        console.print(f"{Emojis.RESTART} 正在重启所有服务...", style="restart")
+        console.print(f"{Emojis.RESTART} Restarting all services...", style="restart")
         success = True
         for name in service_names:
             if not manager.restart(name):
-                print_error(f"重启服务 '{name}' 失败")
+                print_error(f"Failed to restart '{name}'")
                 success = False
             else:
-                console.print(f"{Emojis.RUNNING} 服务 '{name}' 已成功重启", style="restart")
+                console.print(f"{Emojis.RUNNING} Service '{name}' restarted", style="restart")
         
         if success:
-            print_success("所有服务已成功重启！")
+            print_success("All services restarted successfully!")
         else:
-            print_warning("有些服务重启失败，请检查日志获取详情。")
+            print_warning("Some services failed to restart, check logs for details.")
         
         return success
     else:
         result = manager.restart(service_name)
         if result:
-            console.print(f"{Emojis.RUNNING} 服务 '{service_name}' 已成功重启", style="restart")
+            console.print(f"{Emojis.RUNNING} Service '{service_name}' restarted", style="restart")
         else:
-            print_error(f"重启服务 '{service_name}' 失败")
+            print_error(f"Failed to restart '{service_name}'")
         return result
 
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
-    """处理日志查看命令"""
+    """Handle log command"""
     service_name = args.service
     follow = not args.no_follow
     lines = args.lines
@@ -183,37 +183,37 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     if service_name == 'all':
         services = manager.get_service_names()
         if not services:
-            print_warning("配置中没有定义任何服务。")
+            print_warning("No services defined in config.")
             return False
     else:
         if service_name not in manager.get_service_names():
-            print_error(f"服务 '{service_name}' 在配置中未找到。")
+            print_error(f"Service '{service_name}' not found in config.")
             return False
         services = [service_name]
     
-    # 使用LogManager查看日志
+    # Use LogManager to view logs
     log_manager.tail_logs(services, follow=follow, lines=lines)
     return True
 
 def handle_list(manager: ServiceManager) -> bool:
-    """处理列出服务命令"""
+    """Handle list services command"""
     service_names = manager.get_service_names()
     
     if not service_names:
-        print_warning("配置中没有定义任何服务。")
+        print_warning("No services defined in config.")
         return True
     
-    # 构建服务列表数据
+    # Build service list data
     services = []
     for name in service_names:
         is_running = manager.is_running(name)
         pid = manager.get_service_pid(name)
         
-        # 获取服务运行时间
+        # Get service uptime
         uptime_seconds = manager.get_uptime(name) if is_running else None
         uptime = manager.format_uptime(uptime_seconds) if is_running else "0"
         
-        # 获取 CPU 和内存使用情况
+        # Get CPU and memory usage stats
         cpu_mem_stats = {}
         if is_running:
             stats = manager.get_process_stats(name)
@@ -223,7 +223,7 @@ def handle_list(manager: ServiceManager) -> bool:
             cpu_mem_stats["cpu"] = "0%"
             cpu_mem_stats["memory"] = "0b"
         
-        # 获取重启次数
+        # Get restart count
         restarts_count = manager.get_restarts_count(name)
         
         services.append({
@@ -236,19 +236,18 @@ def handle_list(manager: ServiceManager) -> bool:
             "restarts": str(restarts_count)
         })
     
-    # 使用Rich表格显示服务列表
+    # Display services as table
     print_service_table(services)
     
-    console.print(f"[dim]配置文件: {manager.config_path}[/]")
-    console.print(f"[dim]运行中服务: {len(manager.get_running_services())}/{len(service_names)}[/]")
+    console.print(f"[dim]Config: {manager.config_path}[/]")
+    console.print(f"[dim]Running: {len(manager.get_running_services())}/{len(service_names)}[/]")
     console.print()
     
     return True
 
 def main():
-    """CLI 应用程序入口点"""
-    # 移除显示头部
-    # print_header("PMO - Modern Process Manager")
+    """CLI application entry point"""
+    # Header removed for more compact output
     
     parser = setup_arg_parser()
     args = parser.parse_args()
@@ -257,17 +256,17 @@ def main():
         parser.print_help()
         return 1
     
-    # 创建服务管理器
+    # Create service manager
     try:
         service_manager = ServiceManager(config_path=args.config)
     except Exception as e:
-        print_error(f"加载配置文件时出错: {escape(str(e))}")
+        print_error(f"Error loading config file: {escape(str(e))}")
         return 1
     
-    # 创建日志管理器
+    # Create log manager
     log_manager = LogManager(service_manager.log_dir)
     
-    # 处理命令
+    # Handle commands
     try:
         if args.command == 'start':
             success = handle_start(service_manager, args.service, args.dryrun)
@@ -283,11 +282,11 @@ def main():
             parser.print_help()
             return 1
     except KeyboardInterrupt:
-        console.print(f"\n{Emojis.STOP} 操作被用户中断", style="dim")
+        console.print(f"\n{Emojis.STOP} Operation interrupted by user", style="dim")
         return 1
     except Exception as e:
-        print_error(f"执行命令时出错: {escape(str(e))}")
-        logger.exception("命令执行异常")
+        print_error(f"Error executing command: {escape(str(e))}")
+        logger.exception("Command execution error")
         return 1
         
     return 0 if success else 1
