@@ -84,17 +84,12 @@ def print_service_table(services: List[Dict]):
     # PM2风格列头
     table.add_column("id", justify="center", width=4)
     table.add_column("name", style="cyan", no_wrap=True, width=20)
-    table.add_column("namespace", width=11)
-    table.add_column("version", width=9)
-    table.add_column("mode", width=9)
     table.add_column("pid", justify="right", width=10)
     table.add_column("uptime", justify="right", width=8)
-    table.add_column("↺", justify="center", width=6)
     table.add_column("status", justify="center", width=11)
     table.add_column("cpu", justify="right", width=10)
     table.add_column("mem", justify="right", width=10)
     table.add_column("user", width=10)
-    table.add_column("watching", width=10)
     
     for index, service in enumerate(services):
         name = service["name"]
@@ -116,17 +111,12 @@ def print_service_table(services: List[Dict]):
         table.add_row(
             Text(str(index), style=status_style),
             Text(name, style=status_style),
-            Text("default", style=status_style),
-            Text("N/A", style=status_style),
-            Text("fork", style=status_style),
             Text(str(pid), style=status_style),
             Text(str(uptime), style=status_style),
-            Text(str(restarts), style=status_style),
             Text(status, style=status_style),
             Text(str(cpu), style=status_style),
             Text(str(memory), style=status_style),
             Text(user, style=status_style),
-            Text("disabled", style=status_style)
         )
     
     console.print(table)
