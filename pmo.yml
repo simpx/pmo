@@ -1,0 +1,10 @@
+vineyard-1: env/vineyard/bin/python -m vineyard --socket=/tmp/vineyard_siqian_1.sock --meta=local --rpc_socket_port 6666 --reserve_memory=true -size=4G -2M_alignment=true
+
+vineyard-2: env/vineyard/bin/python -m vineyard --socket=/tmp/vineyard_siqian_2.sock --meta=local --rpc_socket_port 6667 --reserve_memory=true -size=4G -2M_alignment=true
+
+v0-vllm-prefiller:
+  cmd: env/v0/bin/vllm serve Qwen/Qwen2.5-0.5B --v6d-socket=/tmp/vineyard_siqian_2.sock --block-allocator=V6dMockBlockAllocator --swap-space=1.9 --port=7801 --disable-log-requests -tp=1 --enforce-eager
+  env:
+      CUDA_DEVICE_ORDER: PCI_BUS_ID
+      VLLM_FORCE_DETOKENIZE: 1
+      CUDA_VISIBLE_DEVICES: 2

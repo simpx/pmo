@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 import yaml
 import subprocess
-from servly.service import ServiceManager
+from pmo.service import ServiceManager
 
 class TestAdvancedFeatures:
     """测试高级功能"""
