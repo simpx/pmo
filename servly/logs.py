@@ -122,6 +122,7 @@ class LogManager:
             Colors.BRIGHT_GREEN, Colors.BRIGHT_YELLOW, Colors.BRIGHT_BLUE, 
             Colors.BRIGHT_MAGENTA, Colors.BRIGHT_CYAN
         ]
+        self.default_tail_lines = 15  # 默认展示最后15行日志
         
     def get_log_files(self, service_name: str) -> Dict[str, Path]:
         """Get the stdout and stderr log files for a service."""
@@ -144,49 +145,46 @@ class LogManager:
         return self.service_colors[service_name]
     
     def _format_log_header(self, service: str, log_type: str) -> str:
-        """格式化日志头部，带颜色和 emoji"""
-        service_color = self._get_service_color(service)
-        emoji = Emojis.STDOUT if log_type == 'stdout' else Emojis.STDERR
-        type_color = Colors.GREEN if log_type == 'stdout' else Colors.YELLOW
+        """格式化日志头部，PM2格式"""
+        # 获取文件路径用于显示
+        log_files = self.get_log_files(service)
+        file_path = log_files[log_type]
+        file_path_str = str(file_path)
         
-        return (f"\n{Colors.BOLD}{Colors.WHITE}{Emojis.LOG} Log Stream: "
-                f"{service_color}{service}{Colors.RESET} "
-                f"{Colors.BRIGHT_BLACK}({type_color}{emoji} {log_type}{Colors.BRIGHT_BLACK}){Colors.RESET}\n"
-                f"{Colors.BRIGHT_BLACK}{'─' * 60}{Colors.RESET}")
+        # PM2风格的头部
+        return f"\n{Colors.BRIGHT_BLACK}{file_path_str} last {self.default_tail_lines} lines:{Colors.RESET}"
     
     def _format_log_line(self, service: str, log_type: str, line: str, show_timestamp: bool = True) -> str:
-        """格式化单行日志，带颜色和 emoji"""
-        service_color = self._get_service_color(service)
-        timestamp = time.strftime("%Y-%m-%d %H:%M:%S") if show_timestamp else ""
+        """格式化单行日志，PM2格式"""
+        # 使用红色显示stderr的服务名称，绿色显示stdout的服务名称
+        service_color = Colors.RED if log_type == 'stderr' else Colors.GREEN
+        timestamp = ""
         
-        # 根据日志类型选择颜色
-        line_color = Colors.RESET
-        if log_type == 'stderr' and ('error' in line.lower() or 'exception' in line.lower()):
-            prefix = f"{Emojis.ERROR} "
-            line_color = Colors.BRIGHT_RED
-        elif log_type == 'stderr':
-            prefix = f"{Emojis.WARNING} "
-            line_color = Colors.YELLOW
+        # 尝试提取时间戳，或保持原来的行
+        timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})', line)
+        if timestamp_match:
+            timestamp = timestamp_match.group(1)
+            # 移除行中已有的时间戳部分
+            rest_of_line = line.replace(timestamp, "", 1).lstrip()
         else:
-            prefix = f"{Emojis.INFO} "
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            rest_of_line = line
         
-        # 格式化输出
-        if show_timestamp:
-            return (f"{Colors.BRIGHT_BLACK}[{Emojis.TIME} {timestamp}]{Colors.RESET} "
-                    f"{service_color}{service}{Colors.RESET} "
-                    f"{prefix}{line_color}{line.rstrip()}{Colors.RESET}")
-        else:
-            return f"{line_color}{line.rstrip()}{Colors.RESET}"
+        # PM2风格的行格式：服务名 | 时间: 内容
+        return f"{service_color}{service}{Colors.RESET} | {timestamp}: {rest_of_line.rstrip()}"
     
-    def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = 10):
+    def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None):
         """
         Display logs for specified services in real-time.
         
         Args:
             service_names: List of service names to show logs for
             follow: Whether to follow logs in real-time (like tail -f)
-            lines: Number of recent lines to display initially
+            lines: Number of recent lines to display initially, defaults to self.default_tail_lines
         """
+        if lines is None:
+            lines = self.default_tail_lines
+            
         if not service_names:
             print(f"{Emojis.WARNING} {Colors.YELLOW}No services specified for log viewing.{Colors.RESET}")
             return
@@ -199,7 +197,7 @@ class LogManager:
                 if log_path.exists():
                     log_files.append((service, log_type, log_path))
                 else:
-                    service_color = self._get_service_color(service)
+                    service_color = Colors.RED if log_type == 'stderr' else Colors.GREEN
                     print(f"{Emojis.WARNING} {Colors.YELLOW}No {log_type} logs found for {service_color}{service}{Colors.RESET}.")
                     
         if not log_files:
@@ -207,6 +205,8 @@ class LogManager:
             return
             
         if follow:
+            # 首先显示最后几行，然后再开始跟踪
+            self._display_recent_logs(log_files, lines)
             self._follow_logs(log_files)
         else:
             self._display_recent_logs(log_files, lines)
@@ -240,11 +240,7 @@ class LogManager:
                 f.seek(0, os.SEEK_END)
                 file_handlers[(service, log_type)] = f
                 
-                # 打印日志头部
-                print(self._format_log_header(service, log_type))
-                
-            print(f"\n{Emojis.LOADING} {Colors.BRIGHT_BLACK}Following logs... (Ctrl+C to stop){Colors.RESET}")
-            print(f"{Colors.BRIGHT_BLACK}{'─' * 60}{Colors.RESET}")
+            print(f"\n{Colors.BRIGHT_BLACK}Following logs... (Ctrl+C to stop){Colors.RESET}")
             
             while True:
                 has_new_data = False
@@ -259,7 +255,7 @@ class LogManager:
                     time.sleep(0.1)
                     
         except KeyboardInterrupt:
-            print(f"\n{Emojis.STOP} {Colors.BRIGHT_BLACK}Stopped following logs.{Colors.RESET}")
+            print(f"\n{Colors.BRIGHT_BLACK}Stopped following logs.{Colors.RESET}")
         finally:
             # Close all file handlers
             for f in file_handlers.values():

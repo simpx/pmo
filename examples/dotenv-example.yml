@@ -1,158 +1,71 @@
-# 使用.env文件作为环境变量的 Servly 配置示例
-# 这种方法适合管理敏感信息或环境特定的配置
+# 使用.env文件作为环境变量的简化Servly配置示例
 
-# 首先，在同一目录下创建一个.env文件，内容可能如下:
+# .env文件示例内容:
 # DB_HOST=localhost
 # DB_PORT=5432
 # DB_NAME=myapp
 # DB_USER=postgres
 # DB_PASS=secret
 # API_KEY=your_api_key_here
-# DEBUG=true
 
-# 使用dotenv加载环境变量的应用
+# Python应用示例
 web-app:
   cmd: >
     python -c "
-    import os
-    import sys
-    import time
+    import os, sys, time, dotenv
     
-    # 尝试导入dotenv，如果不存在则给出友好的错误信息
-    try:
-        import dotenv
-    except ImportError:
-        print('错误: 缺少必要的Python包 \"python-dotenv\"')
-        print('请使用以下命令安装: pip install python-dotenv')
-        sys.exit(1)
+    # 加载环境变量
+    dotenv.load_dotenv('.env')
     
-    # 检查.env文件是否存在
-    env_file = '.env'
-    if not os.path.exists(env_file):
-        print(f'错误: 找不到{env_file}文件')
-        print('请在当前目录创建一个.env文件，参考格式如下:')
-        print('DB_HOST=localhost')
-        print('DB_PORT=5432')
-        print('DB_NAME=myapp')
-        print('DB_USER=postgres')
-        print('DB_PASS=secret')
-        print('API_KEY=your_api_key_here')
-        print('DEBUG=true')
-        sys.exit(1)
-    
-    # 加载.env文件中的环境变量
-    dotenv.load_dotenv(env_file)
-    
-    # 使用环境变量
-    print(f'连接到数据库: {os.environ.get(\"DB_USER\", \"[未设置]\") }@{os.environ.get(\"DB_HOST\", \"[未设置]\")}:{os.environ.get(\"DB_PORT\", \"[未设置]\")}/${os.environ.get(\"DB_NAME\", \"[未设置]\")}')
+    # 显示数据库连接信息
+    print(f'数据库: {os.environ.get(\"DB_USER\", \"[未设置]\")}@{os.environ.get(\"DB_HOST\", \"[未设置]\")}:{os.environ.get(\"DB_PORT\", \"[未设置]\")}')
     print(f'API密钥: {os.environ.get(\"API_KEY\", \"[未设置]\")}')
-    print(f'调试模式: {os.environ.get(\"DEBUG\", \"[未设置]\")}')
     
     # 模拟服务运行
     while True:
         print('服务运行中...')
         time.sleep(10)
     "
-  # 如果需要，也可以直接在配置中覆盖某些环境变量
   env:
     LOG_LEVEL: debug
-    SERVICE_PORT: "8080"  # 使用字符串类型的端口号，避免整数类型引起的问题
+    SERVICE_PORT: "8080"
 
-# 使用预加载环境变量的Node.js应用
+# Node.js应用示例
 node-app:
   cmd: >
-    echo "注意: 此示例需要Node.js环境和dotenv包" &&
-    if ! command -v node > /dev/null; then
-      echo "错误: 未安装Node.js" && 
-      echo "请先安装Node.js后再尝试此示例" &&
-      exit 1;
-    else
-      node -r dotenv/config -e "
-      try {
-        console.log('环境变量加载成功');
-        console.log('数据库: ' + process.env.DB_NAME);
-        console.log('服务端口: ' + process.env.SERVICE_PORT);
-      } catch (err) {
-        console.error('错误: ' + err.message);
-        console.log('可能需要安装dotenv: npm install dotenv');
-        process.exit(1);
-      }
-      "
-    fi
+    node -r dotenv/config -e "
+    console.log('环境变量加载成功');
+    console.log('数据库: ' + process.env.DB_NAME);
+    console.log('服务端口: ' + process.env.SERVICE_PORT);
+    "
 
-# 直接使用环境变量的数据库备份服务
+# Shell脚本示例
 db-backup:
   cmd: |
-    # 检查.env文件是否存在
-    if [ ! -f .env ]; then
-      echo "错误: 找不到.env文件"
-      echo "请在当前目录创建一个.env文件，参考格式如下:"
-      echo "DB_HOST=localhost"
-      echo "DB_PORT=5432"
-      echo "DB_USER=postgres"
-      echo "DB_PASS=secret"
-      exit 1
-    fi
-    
-    # 检查是否安装了PostgreSQL客户端
-    if ! command -v pg_dump > /dev/null; then
-      echo "错误: 未安装PostgreSQL客户端"
-      echo "请先安装postgresql-client后再尝试此示例"
-      exit 1
-    fi
-    
     # 加载并使用环境变量
     set -a
     source .env
     set +a
     
-    echo "准备备份数据库..."
-    echo "主机: $DB_HOST"
-    echo "端口: $DB_PORT"
-    echo "数据库: $DB_NAME"
-    echo "用户: $DB_USER"
-    
-    # 创建一个模拟备份文件
-    echo "-- 模拟的数据库备份文件" > backup_$(date +%Y%m%d).sql
-    echo "-- 创建于: $(date)" >> backup_$(date +%Y%m%d).sql
-    echo "-- 此文件由Servly示例生成，不包含实际数据" >> backup_$(date +%Y%m%d).sql
-    
-    echo "备份完成: backup_$(date +%Y%m%d).sql"
+    echo "数据库信息: $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
+    echo "创建备份文件: backup_$(date +%Y%m%d).sql"
+    echo "-- 模拟数据库备份" > backup_$(date +%Y%m%d).sql
 
-# 使用源码中的秘钥，但使用环境变量覆盖以提高安全性
+# 环境变量覆盖示例
 api-server:
   cmd: >
     python -c "
-    import os
-    import sys
-    import time
+    import os, time
     
-    # 检查重要的环境变量是否存在
-    required_vars = ['JWT_SECRET', 'REDIS_PASSWORD']
-    missing_vars = [var for var in required_vars if not os.environ.get(var)]
-    
-    if missing_vars:
-        print(f'警告: 以下环境变量未设置: {\", \".join(missing_vars)}')
-        print('在生产环境中，这些变量应该被正确设置以确保安全')
-        
-    # 使用环境变量或默认值（仅用于演示）
-    jwt_secret = os.environ.get('JWT_SECRET', 'dev_secret_key')
-    redis_pwd = os.environ.get('REDIS_PASSWORD', 'dev_password')
-    
-    print(f'JWT密钥: {\"\".join([\"*\" for _ in range(len(jwt_secret))])}')
-    print(f'Redis密码: {\"\".join([\"*\" for _ in range(len(redis_pwd))])}')
-    print('API服务器启动中...')
-    
-    # 模拟服务启动
-    time.sleep(2)
+    # 显示密钥信息（已隐藏）
+    jwt_secret = os.environ.get('JWT_SECRET', 'default_key')
+    print(f'JWT密钥: {"*" * len(jwt_secret)}')
     print('API服务器运行在 http://localhost:3000')
     
     while True:
         time.sleep(10)
-        print('API服务器处理请求中...')
+        print('API请求处理中...')
     "
-  # 敏感信息通过环境变量注入，而不是硬编码
   env:
-    JWT_SECRET: dev_jwt_secret_for_testing_only
-    REDIS_PASSWORD: dev_redis_password
-    ADMIN_PASSWORD: admin123
+    JWT_SECRET: dev_jwt_secret
+    REDIS_PASSWORD: dev_password
