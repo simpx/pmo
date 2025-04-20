@@ -81,6 +81,88 @@ class TestAdvancedFeatures:
         _, kwargs = mock_popen.call_args
         assert 'cwd' in kwargs
         assert kwargs['cwd'] == str(test_dir)
+    
+    @patch('subprocess.Popen')
+    def test_multiline_command(self, mock_popen, temp_dir):
+        """TC4.3: 测试长命令行使用换行符"""
+        # 创建包含多行命令的配置
+        config = {
+            'multiline-cmd': {
+                'cmd': """python -c "
+import sys
+import time
+print('Testing multiline command')
+time.sleep(0.1)
+sys.stdout.flush()
+print('Command executed successfully')
+"
+"""
+            },
+            'multiline-cmd-with-env': {
+                'cmd': """
+                    PYTHONPATH=/path/to/lib \
+                    DEBUG=true \
+                    LOG_LEVEL=debug \
+                    python -m complex_script \
+                        --arg1=value1 \
+                        --arg2=value2 \
+                        --enabled \
+                        --config=/etc/config.json
+                """
+            }
+        }
+        
+        config_path = Path(temp_dir) / 'multiline_cmd_test.yml'
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
+        
+        mock_process = MagicMock()
+        mock_process.pid = 12345
+        mock_popen.return_value = mock_process
+        
+        # 创建服务管理器
+        manager = ServiceManager(config_path=config_path)
+        
+        # 启动第一个多行脚本服务
+        result1 = manager.start('multiline-cmd')
+        assert result1 is True
+        
+        # 验证命令是否被正确传递，保留换行符
+        call1_args, call1_kwargs = mock_popen.call_args_list[0]
+        assert call1_kwargs.get('shell') is True, "命令应该以 shell=True 模式执行"
+        cmd1 = call1_args[0]
+        
+        # 验证多行命令中的关键部分
+        assert "import sys" in cmd1
+        assert "import time" in cmd1
+        assert "Testing multiline command" in cmd1
+        
+        # 重置模拟并设置新的返回值
+        mock_popen.reset_mock()
+        mock_process2 = MagicMock()
+        mock_process2.pid = 12346
+        mock_popen.return_value = mock_process2
+        
+        # 启动第二个带环境变量和行连接符的服务
+        result2 = manager.start('multiline-cmd-with-env')
+        assert result2 is True
+        
+        # 验证带续行符的命令是否被正确处理
+        call2_args, call2_kwargs = mock_popen.call_args_list[0]
+        assert call2_kwargs.get('shell') is True, "命令应该以 shell=True 模式执行"
+        cmd2 = call2_args[0]
+        
+        # 验证包含续行符和缩进的命令中的关键部分
+        assert "python -m complex_script" in cmd2
+        assert "--arg1=value1" in cmd2
+        assert "--arg2=value2" in cmd2
+        assert "--enabled" in cmd2
+        assert "--config=/etc/config.json" in cmd2
+        
+        # 验证环境变量是否在命令字符串中
+        assert "PYTHONPATH=/path/to/lib" in cmd2
+        assert "DEBUG=true" in cmd2
+        assert "LOG_LEVEL=debug" in cmd2
 
 class TestErrorHandling:
     """测试错误处理"""
