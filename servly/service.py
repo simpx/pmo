@@ -17,7 +17,9 @@ class ServiceManager:
     
     def __init__(self, config_path: str = "servly.yml", servly_dir: str = ".servly"):
         self.config_path = config_path
-        self.servly_dir = Path(servly_dir)
+        # 修改为使用配置文件所在目录
+        config_dir = os.path.dirname(os.path.abspath(config_path))
+        self.servly_dir = Path(config_dir) / servly_dir
         self.pid_dir = self.servly_dir / "pids"
         self.log_dir = self.servly_dir / "logs"
         self._ensure_dirs()
