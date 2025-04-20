@@ -1,0 +1,19 @@
+# 简单的 Servly 配置示例
+# 它使用最简单的格式定义服务
+
+# 简单的 HTTP 服务器
+http-server: 
+  cmd: python -m http.server 8000
+  
+# 简单的定时任务
+clock: 
+  cmd: watch -n 5 date
+
+# 使用更简洁的格式，直接指定命令字符串
+echo-service: echo "Servly is running"
+
+# 使用长命令格式示例
+ping-service:
+  cmd: ping -c 3 localhost
+  # 可选 - 指定工作目录
+  cwd: /tmp
