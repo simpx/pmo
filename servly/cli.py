@@ -69,8 +69,8 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     log_parser.add_argument('--lines', '-l', type=int, default=10,
                           help='初始显示的行数')
     
-    # List 命令 - 保留原命令名，不改为 ps
-    list_parser = subparsers.add_parser('list', help='列出服务')
+    # PS 命令 (替代原 List 命令)
+    ps_parser = subparsers.add_parser('ps', help='列出服务')
     
     return parser
 
@@ -196,7 +196,8 @@ def handle_list(manager: ServiceManager) -> bool:
         print_warning("配置中没有定义任何服务。")
         return True
     
-    print_header("服务列表")
+    # 移除多余的标题
+    # print_header("服务列表")
     
     # 构建服务列表数据
     services = []
@@ -238,8 +239,8 @@ def handle_list(manager: ServiceManager) -> bool:
 
 def main():
     """CLI 应用程序入口点"""
-    # 显示头部
-    print_header("SERVLY - Modern Process Manager")
+    # 移除显示头部
+    # print_header("SERVLY - Modern Process Manager")
     
     parser = setup_arg_parser()
     args = parser.parse_args()
@@ -268,7 +269,7 @@ def main():
             success = handle_restart(service_manager, args.service)
         elif args.command == 'log':
             success = handle_log(service_manager, log_manager, args)
-        elif args.command == 'list':
+        elif args.command == 'ps':
             success = handle_list(service_manager)
         else:
             parser.print_help()

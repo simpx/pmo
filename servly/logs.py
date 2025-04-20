@@ -79,19 +79,19 @@ def print_success(message: str):
 
 def print_service_table(services: List[Dict]):
     """打印服务状态表格，PM2风格紧凑布局"""
-    table = Table(show_header=True, header_style="header", expand=True, box=box.SIMPLE)
+    table = Table(show_header=True, header_style="header", box=box.ASCII)
     
     # PM2风格紧凑表头
-    table.add_column("name", style="cyan")
-    table.add_column("pid", justify="right")
-    table.add_column("uptime", justify="right")
-    table.add_column("cpu", justify="right")
-    table.add_column("mem", justify="right")
+    table.add_column("name", style="cyan", no_wrap=True, width=30)
+    table.add_column("pid", justify="right", width=10)
+    table.add_column("uptime", justify="right", width=10)
+    table.add_column("cpu", justify="right", width=8)
+    table.add_column("mem", justify="right", width=8)
     
     for service in services:
         name = service["name"]
-        pid = service["pid"] or "-"
-        uptime = service.get("uptime", "-")
+        pid = service["pid"] or "0"
+        uptime = service.get("uptime", "0")
         cpu = service.get("cpu", "0%")
         memory = service.get("memory", "0b")
         
