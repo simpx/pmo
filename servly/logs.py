@@ -1,5 +1,6 @@
 """
 Log management functionality for Servly.
+使用Rich库进行日志格式化和展示，实现PM2风格的日志效果。
 """
 import os
 import sys
@@ -7,13 +8,15 @@ import time
 import re
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
-import random
 
-# Rich库导入
 from rich.console import Console
 from rich.theme import Theme
+from rich.text import Text
+from rich.panel import Panel
+from rich.table import Table
+from rich.live import Live
 
-# 自定义Rich主题，定义我们需要的颜色样式
+# 自定义Rich主题
 custom_theme = Theme({
     "warning": "yellow",
     "error": "bold red",
@@ -21,48 +24,20 @@ custom_theme = Theme({
     "dim": "dim",
     "stdout_service": "green",
     "stderr_service": "red",
+    "header": "cyan bold",
+    "subheader": "bright_black",
+    "running": "green",
+    "stopped": "bright_black",
+    "restart": "magenta",
+    "separator": "cyan",
 })
 
 # 创建Rich控制台对象
 console = Console(theme=custom_theme)
 
-# ANSI 颜色代码 - 保留以确保兼容性
-class Colors:
-    RESET = "\033[0m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-    
-    BLACK = "\033[30m"
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    YELLOW = "\033[33m"
-    BLUE = "\033[34m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
-    WHITE = "\033[37m"
-    
-    BRIGHT_BLACK = "\033[90m"
-    BRIGHT_RED = "\033[91m"
-    BRIGHT_GREEN = "\033[92m"
-    BRIGHT_YELLOW = "\033[93m"
-    BRIGHT_BLUE = "\033[94m"
-    BRIGHT_MAGENTA = "\033[95m"
-    BRIGHT_CYAN = "\033[96m"
-    BRIGHT_WHITE = "\033[97m"
-    
-    # 背景色
-    BG_BLACK = "\033[40m"
-    BG_RED = "\033[41m"
-    BG_GREEN = "\033[42m"
-    BG_YELLOW = "\033[43m"
-    BG_BLUE = "\033[44m"
-    BG_MAGENTA = "\033[45m"
-    BG_CYAN = "\033[46m"
-    BG_WHITE = "\033[47m"
-
-
 # 服务相关的 emoji
 class Emojis:
+    """服务状态相关的emoji图标"""
     SERVICE = "🔧"
     START = "🟢"
     STOP = "🔴"
@@ -78,72 +53,68 @@ class Emojis:
     STOPPED = "⛔"
     LOADING = "⏳"
 
+# Rich格式化输出工具函数
+def print_header(title: str):
+    """打印美化的标题"""
+    console.print()
+    console.rule(f"[header]{Emojis.SERVICE} {title}[/]", style="separator")
+    console.print()
 
-# 处理彩色文本对齐的辅助函数 - 保留以确保兼容性
-def strip_ansi_codes(text: str) -> str:
-    """删除字符串中的所有 ANSI 转义代码"""
-    ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-    return ansi_escape.sub('', text)
+def print_info(message: str):
+    """打印信息消息"""
+    console.print(f"{Emojis.INFO} {message}", style="info")
 
-def get_visible_length(text: str) -> int:
-    """获取文本在终端中的可见长度（排除 ANSI 代码和宽字符）"""
-    text = strip_ansi_codes(text)
-    # 处理中文等宽字符（在大多数终端中占用两个字符宽度）
-    length = 0
-    for char in text:
-        if ord(char) > 127:  # 简单判断是否是非ASCII字符
-            length += 2
-        else:
-            length += 1
-    return length
+def print_warning(message: str):
+    """打印警告消息"""
+    console.print(f"{Emojis.WARNING} {message}", style="warning")
 
-def align_colored_text(text: str, width: int, align='left') -> str:
-    """
-    将彩色文本对齐到指定宽度
+def print_error(message: str):
+    """打印错误消息"""
+    console.print(f"{Emojis.ERROR} {message}", style="error")
+
+def print_success(message: str):
+    """打印成功消息"""
+    console.print(f"{Emojis.RUNNING} {message}", style="running")
+
+def print_service_table(services: List[Dict]):
+    """打印服务状态表格"""
+    table = Table(show_header=True, header_style="header", expand=True)
+    table.add_column("名称", style="cyan")
+    table.add_column("状态")
+    table.add_column("PID")
     
-    Args:
-        text: 可能包含 ANSI 颜色代码的文本
-        width: 期望的显示宽度
-        align: 对齐方式，'left', 'right' 或 'center'
+    for service in services:
+        name = service["name"]
+        status = service["status"]
+        pid = service["pid"] or "-"
         
-    Returns:
-        对齐后的文本，保留颜色代码
-    """
-    visible_length = get_visible_length(text)
-    padding = max(0, width - visible_length)
+        status_style = "running" if status == "running" else "stopped"
+        status_emoji = Emojis.RUNNING if status == "running" else Emojis.STOPPED
+        status_text = f"{status_emoji} {status.upper()}"
+        
+        table.add_row(
+            name,
+            Text(status_text, style=status_style),
+            Text(str(pid), style=status_style)
+        )
     
-    if align == 'right':
-        return ' ' * padding + text
-    elif align == 'center':
-        left_padding = padding // 2
-        right_padding = padding - left_padding
-        return ' ' * left_padding + text + ' ' * right_padding
-    else:  # left alignment
-        return text + ' ' * padding
+    console.print(table)
+    console.print()
 
 
 class LogManager:
-    """Handles viewing and managing logs for servly services."""
+    """管理和显示服务日志"""
     
     def __init__(self, log_dir: Path):
         self.log_dir = log_dir
         self.default_tail_lines = 15  # 默认展示最后15行日志
         
     def get_log_files(self, service_name: str) -> Dict[str, Path]:
-        """Get the stdout and stderr log files for a service."""
+        """获取服务的stdout和stderr日志文件路径"""
         return {
             'stdout': self.log_dir / f"{service_name}-out.log",
             'stderr': self.log_dir / f"{service_name}-error.log"
         }
-    
-    def _format_log_header(self, service: str, log_type: str) -> str:
-        """格式化日志头部为PM2风格"""
-        log_files = self.get_log_files(service)
-        file_path = log_files[log_type]
-        file_path_str = str(file_path)
-        
-        # PM2风格的头部（使用rich来打印，不需要返回格式化字符串）
-        return file_path_str
     
     def _parse_log_line(self, line: str) -> Tuple[str, str]:
         """解析日志行，提取时间戳和内容"""
@@ -163,21 +134,21 @@ class LogManager:
     
     def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None):
         """
-        Display logs for specified services in real-time.
+        显示服务日志
         
         Args:
-            service_names: List of service names to show logs for
-            follow: Whether to follow logs in real-time (like tail -f)
-            lines: Number of recent lines to display initially, defaults to self.default_tail_lines
+            service_names: 要查看的服务名称列表
+            follow: 是否实时跟踪日志（类似tail -f）
+            lines: 初始显示的行数，默认为self.default_tail_lines
         """
         if lines is None:
             lines = self.default_tail_lines
             
         if not service_names:
-            console.print(f"{Emojis.WARNING} No services specified for log viewing.", style="warning")
+            print_warning("未指定要查看日志的服务。")
             return
 
-        # Check if the logs exist
+        # 检查日志文件是否存在
         log_files = []
         for service in service_names:
             service_logs = self.get_log_files(service)
@@ -186,10 +157,10 @@ class LogManager:
                     log_files.append((service, log_type, log_path))
                 else:
                     style = "stderr_service" if log_type == "stderr" else "stdout_service" 
-                    console.print(f"{Emojis.WARNING} No {log_type} logs found for [{style}]{service}[/].", style="warning")
+                    console.print(f"{Emojis.WARNING} 未找到服务 [{style}]{service}[/] 的 {log_type} 日志。", style="warning")
                     
         if not log_files:
-            console.print(f"{Emojis.WARNING} No log files found for specified services.", style="warning")
+            print_warning("未找到指定服务的日志文件。")
             return
             
         if follow:
@@ -200,10 +171,10 @@ class LogManager:
             self._display_recent_logs(log_files, lines)
     
     def _display_recent_logs(self, log_files: List[Tuple[str, str, Path]], lines: int):
-        """Display the most recent lines from log files."""
+        """显示最近的日志行"""
         for service, log_type, log_path in log_files:
-            file_path_str = self._format_log_header(service, log_type)
-            console.print(f"\n[dim]{file_path_str} last {self.default_tail_lines} lines:[/]")
+            # PM2风格的标题
+            console.print(f"\n[dim]{log_path} last {lines} lines:[/]")
             
             try:
                 # 读取最后N行
@@ -211,28 +182,27 @@ class LogManager:
                     content = f.readlines()
                     last_lines = content[-lines:] if len(content) >= lines else content
                     
-                    # 打印每一行，增加格式
+                    # 打印每一行，PM2格式
                     for line in last_lines:
                         timestamp, message = self._parse_log_line(line)
                         style = "stderr_service" if log_type == "stderr" else "stdout_service"
                         console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
             except Exception as e:
-                console.print(f"{Emojis.ERROR} Error reading logs: {str(e)}", style="error")
+                print_error(f"读取日志文件出错: {str(e)}")
     
     def _follow_logs(self, log_files: List[Tuple[str, str, Path]]):
-        """Follow logs in real-time, similar to tail -f."""
-        # Dictionary to keep track of file positions
+        """实时跟踪日志（类似tail -f）"""
         file_handlers = {}
         
         try:
-            # Open all log files
+            # 打开所有日志文件
             for service, log_type, log_path in log_files:
                 f = open(log_path, 'r')
-                # Move to the end of the file
+                # 移动到文件末尾
                 f.seek(0, os.SEEK_END)
                 file_handlers[(service, log_type)] = f
                 
-            console.print(f"\n[dim]Following logs... (Ctrl+C to stop)[/]")
+            console.print(f"\n[dim]正在跟踪日志... (按Ctrl+C停止)[/]")
             
             while True:
                 has_new_data = False
@@ -249,8 +219,8 @@ class LogManager:
                     time.sleep(0.1)
                     
         except KeyboardInterrupt:
-            console.print(f"\n[dim]Stopped following logs.[/]")
+            console.print(f"\n[dim]已停止日志跟踪[/]")
         finally:
-            # Close all file handlers
+            # 关闭所有文件
             for f in file_handlers.values():
                 f.close()

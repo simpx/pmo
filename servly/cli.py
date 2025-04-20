@@ -1,52 +1,40 @@
 #!/usr/bin/env python3
 """
 Command-line interface for Servly process manager.
+使用Rich库进行终端输出格式化
 """
 import os
 import sys
 import argparse
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Dict, Optional
 
 from servly.service import ServiceManager
-from servly.logs import LogManager
-from servly.logs import Colors, Emojis  # 导入颜色和表情符号定义
-from servly.logs import align_colored_text  # 导入对齐工具函数
+from servly.logs import LogManager, Emojis
+from servly.logs import console, print_header, print_info, print_warning, print_error, print_success, print_service_table
 
-# 配置彩色日志记录器
-class ColoredFormatter(logging.Formatter):
-    """添加颜色支持的日志格式化器"""
-    
-    def format(self, record):
-        log_message = super().format(record)
-        
-        if record.levelno >= logging.ERROR:
-            return f"{Emojis.ERROR} {Colors.BRIGHT_RED}{log_message}{Colors.RESET}"
-        elif record.levelno >= logging.WARNING:
-            return f"{Emojis.WARNING} {Colors.YELLOW}{log_message}{Colors.RESET}"
-        elif record.levelno >= logging.INFO:
-            return f"{Emojis.INFO} {Colors.GREEN}{log_message}{Colors.RESET}"
-        else:
-            return f"{Colors.BRIGHT_BLACK}{log_message}{Colors.RESET}"
+from rich.logging import RichHandler
+from rich.traceback import install
+from rich.markup import escape
 
-# 配置日志
-handler = logging.StreamHandler()
-handler.setFormatter(ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger = logging.getLogger('servly')
-logger.setLevel(logging.INFO)
-logger.addHandler(handler)
+# 安装Rich的异常格式化器
+install()
 
-def print_header():
-    """打印美化的 Servly 头部"""
-    print(f"\n{Colors.CYAN}{Colors.BOLD}{'=' * 50}")
-    print(f"{Emojis.SERVICE} SERVLY {Colors.BRIGHT_BLACK}- Modern Process Manager")
-    print(f"{Colors.CYAN}{'=' * 50}{Colors.RESET}\n")
+# 配置Rich日志处理
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True, markup=True)]
+)
+
+logger = logging.getLogger("servly")
 
 def setup_arg_parser() -> argparse.ArgumentParser:
     """设置命令行参数解析器"""
     parser = argparse.ArgumentParser(
-        description=f"{Colors.CYAN}{Colors.BOLD}{Emojis.SERVICE} Servly - Modern process manager{Colors.RESET}",
+        description=f"{Emojis.SERVICE} Servly - Modern process manager",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
@@ -91,30 +79,30 @@ def handle_start(manager: ServiceManager, service_name: str) -> bool:
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
-            print(f"{Emojis.WARNING} {Colors.YELLOW}配置中没有定义任何服务。{Colors.RESET}")
+            print_warning("配置中没有定义任何服务。")
             return False
         
-        print(f"{Emojis.START} {Colors.BRIGHT_GREEN}正在启动所有服务...{Colors.RESET}")
+        console.print(f"{Emojis.START} 正在启动所有服务...", style="running")
         success = True
         for name in service_names:
             if not manager.start(name):
-                print(f"{Emojis.ERROR} {Colors.RED}启动服务 '{name}' 失败{Colors.RESET}")
+                print_error(f"启动服务 '{name}' 失败")
                 success = False
             else:
-                print(f"{Emojis.RUNNING} {Colors.GREEN}服务 '{name}' 已成功启动{Colors.RESET}")
+                print_success(f"服务 '{name}' 已成功启动")
         
         if success:
-            print(f"\n{Emojis.RUNNING} {Colors.BRIGHT_GREEN}所有服务已成功启动！{Colors.RESET}")
+            print_success("所有服务已成功启动！")
         else:
-            print(f"\n{Emojis.WARNING} {Colors.YELLOW}有些服务启动失败，请检查日志获取详情。{Colors.RESET}")
+            print_warning("有些服务启动失败，请检查日志获取详情。")
         
         return success
     else:
         result = manager.start(service_name)
         if result:
-            print(f"{Emojis.RUNNING} {Colors.GREEN}服务 '{service_name}' 已成功启动{Colors.RESET}")
+            print_success(f"服务 '{service_name}' 已成功启动")
         else:
-            print(f"{Emojis.ERROR} {Colors.RED}启动服务 '{service_name}' 失败{Colors.RESET}")
+            print_error(f"启动服务 '{service_name}' 失败")
         return result
 
 def handle_stop(manager: ServiceManager, service_name: str) -> bool:
@@ -122,30 +110,30 @@ def handle_stop(manager: ServiceManager, service_name: str) -> bool:
     if service_name == 'all':
         service_names = manager.get_running_services()
         if not service_names:
-            print(f"{Emojis.INFO} {Colors.BRIGHT_BLACK}当前没有正在运行的服务。{Colors.RESET}")
+            console.print(f"{Emojis.INFO} 当前没有正在运行的服务。", style="dim")
             return True
         
-        print(f"{Emojis.STOP} {Colors.YELLOW}正在停止所有服务...{Colors.RESET}")
+        console.print(f"{Emojis.STOP} 正在停止所有服务...", style="warning")
         success = True
         for name in service_names:
             if not manager.stop(name):
-                print(f"{Emojis.ERROR} {Colors.RED}停止服务 '{name}' 失败{Colors.RESET}")
+                print_error(f"停止服务 '{name}' 失败")
                 success = False
             else:
-                print(f"{Emojis.STOPPED} {Colors.YELLOW}服务 '{name}' 已停止{Colors.RESET}")
+                console.print(f"{Emojis.STOPPED} 服务 '{name}' 已停止", style="stopped")
         
         if success:
-            print(f"\n{Emojis.STOPPED} {Colors.YELLOW}所有服务已成功停止！{Colors.RESET}")
+            console.print(f"\n{Emojis.STOPPED} 所有服务已成功停止！", style="warning")
         else:
-            print(f"\n{Emojis.WARNING} {Colors.YELLOW}有些服务停止失败，请检查日志获取详情。{Colors.RESET}")
+            print_warning("有些服务停止失败，请检查日志获取详情。")
         
         return success
     else:
         result = manager.stop(service_name)
         if result:
-            print(f"{Emojis.STOPPED} {Colors.YELLOW}服务 '{service_name}' 已成功停止{Colors.RESET}")
+            console.print(f"{Emojis.STOPPED} 服务 '{service_name}' 已成功停止", style="warning")
         else:
-            print(f"{Emojis.ERROR} {Colors.RED}停止服务 '{service_name}' 失败{Colors.RESET}")
+            print_error(f"停止服务 '{service_name}' 失败")
         return result
 
 def handle_restart(manager: ServiceManager, service_name: str) -> bool:
@@ -153,30 +141,30 @@ def handle_restart(manager: ServiceManager, service_name: str) -> bool:
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
-            print(f"{Emojis.WARNING} {Colors.YELLOW}配置中没有定义任何服务。{Colors.RESET}")
+            print_warning("配置中没有定义任何服务。")
             return False
         
-        print(f"{Emojis.RESTART} {Colors.MAGENTA}正在重启所有服务...{Colors.RESET}")
+        console.print(f"{Emojis.RESTART} 正在重启所有服务...", style="restart")
         success = True
         for name in service_names:
             if not manager.restart(name):
-                print(f"{Emojis.ERROR} {Colors.RED}重启服务 '{name}' 失败{Colors.RESET}")
+                print_error(f"重启服务 '{name}' 失败")
                 success = False
             else:
-                print(f"{Emojis.RUNNING} {Colors.MAGENTA}服务 '{name}' 已成功重启{Colors.RESET}")
+                console.print(f"{Emojis.RUNNING} 服务 '{name}' 已成功重启", style="restart")
         
         if success:
-            print(f"\n{Emojis.RUNNING} {Colors.BRIGHT_GREEN}所有服务已成功重启！{Colors.RESET}")
+            print_success("所有服务已成功重启！")
         else:
-            print(f"\n{Emojis.WARNING} {Colors.YELLOW}有些服务重启失败，请检查日志获取详情。{Colors.RESET}")
+            print_warning("有些服务重启失败，请检查日志获取详情。")
         
         return success
     else:
         result = manager.restart(service_name)
         if result:
-            print(f"{Emojis.RUNNING} {Colors.MAGENTA}服务 '{service_name}' 已成功重启{Colors.RESET}")
+            console.print(f"{Emojis.RUNNING} 服务 '{service_name}' 已成功重启", style="restart")
         else:
-            print(f"{Emojis.ERROR} {Colors.RED}重启服务 '{service_name}' 失败{Colors.RESET}")
+            print_error(f"重启服务 '{service_name}' 失败")
         return result
 
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
@@ -188,15 +176,15 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     if service_name == 'all':
         services = manager.get_service_names()
         if not services:
-            print(f"{Emojis.WARNING} {Colors.YELLOW}配置中没有定义任何服务。{Colors.RESET}")
+            print_warning("配置中没有定义任何服务。")
             return False
     else:
         if service_name not in manager.get_service_names():
-            print(f"{Emojis.ERROR} {Colors.RED}服务 '{service_name}' 在配置中未找到。{Colors.RESET}")
+            print_error(f"服务 '{service_name}' 在配置中未找到。")
             return False
         services = [service_name]
     
-    # 已经在 LogManager 中添加了彩色输出
+    # 使用LogManager查看日志
     log_manager.tail_logs(services, follow=follow, lines=lines)
     return True
 
@@ -205,50 +193,36 @@ def handle_list(manager: ServiceManager) -> bool:
     service_names = manager.get_service_names()
     
     if not service_names:
-        print(f"{Emojis.WARNING} {Colors.YELLOW}配置中没有定义任何服务。{Colors.RESET}")
+        print_warning("配置中没有定义任何服务。")
         return True
     
-    # 表头
-    print(f"\n{Colors.CYAN}{Colors.BOLD}{Emojis.SERVICE} 服务列表{Colors.RESET}")
-    print(f"{Colors.CYAN}{'─' * 60}{Colors.RESET}")
+    print_header("服务列表")
     
-    # 列标题
-    print(f"{Colors.BOLD}{align_colored_text('  名称', 25)} {align_colored_text('状态', 20)} {align_colored_text('PID', 10)}{Colors.RESET}")
-    print(f"{Colors.BRIGHT_BLACK}{'─' * 60}{Colors.RESET}")
-    
-    # 服务列表
+    # 构建服务列表数据
+    services = []
     for name in service_names:
         is_running = manager.is_running(name)
-        pid = manager.get_service_pid(name) or '-'
+        pid = manager.get_service_pid(name)
         
-        if is_running:
-            status_text = f"{Emojis.RUNNING} {Colors.GREEN}RUNNING{Colors.RESET}"
-            pid_text = f"{Colors.GREEN}{pid}{Colors.RESET}"
-        else:
-            status_text = f"{Emojis.STOPPED} {Colors.BRIGHT_BLACK}STOPPED{Colors.RESET}"
-            pid_text = f"{Colors.BRIGHT_BLACK}{pid}{Colors.RESET}"
-        
-        # 为不同服务使用不同颜色
-        service_color = Colors.CYAN if is_running else Colors.BRIGHT_BLACK
-        service_text = f"{service_color}{name}{Colors.RESET}"
-        
-        # 使用对齐辅助函数确保正确对齐包含颜色代码的文本
-        aligned_service = align_colored_text(f"  {service_text}", 25)
-        aligned_status = align_colored_text(status_text, 20)
-        aligned_pid = align_colored_text(pid_text, 10)
-        
-        print(f"{aligned_service}{aligned_status}{aligned_pid}")
+        services.append({
+            "name": name,
+            "status": "running" if is_running else "stopped",
+            "pid": pid
+        })
     
-    print(f"\n{Colors.BRIGHT_BLACK}配置文件: {manager.config_path}{Colors.RESET}")
-    print(f"{Colors.BRIGHT_BLACK}运行中服务: {len(manager.get_running_services())}/{len(service_names)}{Colors.RESET}")
-    print()
+    # 使用Rich表格显示服务列表
+    print_service_table(services)
+    
+    console.print(f"[dim]配置文件: {manager.config_path}[/]")
+    console.print(f"[dim]运行中服务: {len(manager.get_running_services())}/{len(service_names)}[/]")
+    console.print()
     
     return True
 
 def main():
     """CLI 应用程序入口点"""
     # 显示头部
-    print_header()
+    print_header("SERVLY - Modern Process Manager")
     
     parser = setup_arg_parser()
     args = parser.parse_args()
@@ -261,7 +235,7 @@ def main():
     try:
         service_manager = ServiceManager(config_path=args.config)
     except Exception as e:
-        print(f"{Emojis.ERROR} {Colors.RED}加载配置文件时出错: {e}{Colors.RESET}")
+        print_error(f"加载配置文件时出错: {escape(str(e))}")
         return 1
     
     # 创建日志管理器
@@ -283,10 +257,11 @@ def main():
             parser.print_help()
             return 1
     except KeyboardInterrupt:
-        print(f"\n{Emojis.STOP} {Colors.BRIGHT_BLACK}操作被用户中断{Colors.RESET}")
+        console.print(f"\n{Emojis.STOP} 操作被用户中断", style="dim")
         return 1
     except Exception as e:
-        print(f"\n{Emojis.ERROR} {Colors.RED}执行命令时出错: {e}{Colors.RESET}")
+        print_error(f"执行命令时出错: {escape(str(e))}")
+        logger.exception("命令执行异常")
         return 1
         
     return 0 if success else 1
