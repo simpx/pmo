@@ -62,16 +62,33 @@ Restarts all services or a specific service by name.
 
 ### servly.yml
 
-Example configuration:
+Servly supports both simple command format and detailed configuration:
 
 ```yaml
+# Basic usage - directly specify command
 app1: python app.py
 
+# Detailed configuration
 app2:
   script: "python app.py"
   cwd: "./service1"
   env:
     NODE_ENV: production
+```
+
+The basic format `app-name: command` allows for quick and simple service definition without additional configuration.
+
+**Note:** The name "servly" is reserved and cannot be used as an application name, to avoid conflicts with internal configuration directives.
+
+Examples:
+
+```yaml
+# Valid configurations
+web-server: node server.js
+api: python api.py
+
+# Invalid - using reserved name
+servly: node app.js  # This will not work as expected
 ```
 
 ### Environment Variables
