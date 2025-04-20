@@ -27,3 +27,8 @@ servly = "servly.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["servly*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+]
