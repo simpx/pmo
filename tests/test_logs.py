@@ -76,8 +76,9 @@ class TestLogging:
             call_args = mock_tail_logs.call_args[0][0]
             assert set(call_args) == {'test-echo', 'test-sleep'}
     
-    @patch('subprocess.run')
-    def test_no_follow_option(self, mock_run):
+    @patch('servly.logs.LogManager._follow_logs')
+    @patch('servly.logs.LogManager._display_recent_logs')
+    def test_no_follow_option(self, mock_display, mock_follow):
         """TC3.3: 测试不跟随日志的选项（--no-follow）"""
         log_manager = LogManager(self.log_dir)
         
@@ -85,18 +86,25 @@ class TestLogging:
         log_manager.tail_logs(['test-service'], follow=False, lines=10)
         
         # 验证调用了 _display_recent_logs 而不是 _follow_logs
-        mock_run.assert_called()
-        # 验证 tail 命令调用
-        mock_run.assert_any_call(['tail', '-n', '10', str(self.log_dir / 'test-service-out.log')])
+        mock_display.assert_called_once()
+        mock_follow.assert_not_called()
+        
+        # 验证传递给 _display_recent_logs 的参数
+        args, kwargs = mock_display.call_args
+        assert len(args) > 0
+        assert args[1] == 10  # 验证行数参数
     
-    @patch('subprocess.run')
-    def test_lines_option(self, mock_run):
+    @patch('servly.logs.LogManager._follow_logs')
+    @patch('servly.logs.LogManager._display_recent_logs')
+    def test_lines_option(self, mock_display, mock_follow):
         """TC3.4: 测试指定显示行数（--lines）"""
         log_manager = LogManager(self.log_dir)
         
         # 测试指定显示 20 行日志
         log_manager.tail_logs(['test-service'], follow=False, lines=20)
         
-        # 验证调用 tail 命令时使用了正确的行数参数
-        mock_run.assert_called()
-        mock_run.assert_any_call(['tail', '-n', '20', str(self.log_dir / 'test-service-out.log')])
+        # 验证调用 _display_recent_logs 并传递正确的行数
+        mock_display.assert_called_once()
+        args, kwargs = mock_display.call_args
+        assert len(args) > 0
+        assert args[1] == 20  # 验证行数参数
