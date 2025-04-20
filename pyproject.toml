@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xm"
+version = "0.1.0"
+description = "simple process manager"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "simpxx", email = "simpxx@gmail.com"}
+]
+keywords = ["command-line", "tool"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.scripts]
+xm = "xm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["xm*"]
