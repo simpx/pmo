@@ -215,7 +215,7 @@ def handle_list(manager: ServiceManager) -> bool:
         
         # Get CPU and memory usage stats
         cpu_mem_stats = {}
-        gpu_stats = {"gpu_memory": "-", "gpu_bus_id": "-"}
+        gpu_stats = {"gpu_memory": "-", "gpu_bus_id": "-", "gpu_id": "-"}
         if is_running:
             stats = manager.get_process_stats(name)
             cpu_mem_stats["cpu"] = manager.format_cpu_percent(stats["cpu_percent"])
@@ -226,6 +226,8 @@ def handle_list(manager: ServiceManager) -> bool:
                 gpu_stats["gpu_memory"] = stats["gpu_memory"]
             if stats.get("gpu_bus_id"):
                 gpu_stats["gpu_bus_id"] = stats["gpu_bus_id"]
+            if stats.get("gpu_id"):
+                gpu_stats["gpu_id"] = stats["gpu_id"]
         else:
             cpu_mem_stats["cpu"] = "0%"
             cpu_mem_stats["memory"] = "0b"
@@ -242,6 +244,7 @@ def handle_list(manager: ServiceManager) -> bool:
             "memory": cpu_mem_stats["memory"],
             "gpu_memory": gpu_stats["gpu_memory"],
             "gpu_bus_id": gpu_stats["gpu_bus_id"],
+            "gpu_id": gpu_stats["gpu_id"],
             "restarts": str(restarts_count)
         })
     

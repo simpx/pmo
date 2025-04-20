@@ -408,7 +408,8 @@ class ServiceManager:
         """获取进程树中所有进程的GPU使用情况"""
         result = {
             "gpu_memory": None,
-            "gpu_bus_id": None
+            "gpu_bus_id": None,
+            "gpu_id": None
         }
         
         # 首先检查是否有pynvml库
@@ -428,20 +429,40 @@ class ServiceManager:
                 logger.warning("nvidia-smi command not available")
                 return result
             
+            # 先获取所有GPU设备信息，用于映射总线ID到设备ID
+            cmd_devices = ["nvidia-smi", "--query-gpu=index,gpu_bus_id", "--format=csv,noheader"]
+            output_devices = subprocess.check_output(cmd_devices, universal_newlines=True)
+            
+            # 解析设备信息，创建总线ID到设备ID的映射
+            pci_to_device_id = {}
+            for line in output_devices.strip().split('\n'):
+                if not line.strip():
+                    continue
+                parts = line.split(', ')
+                if len(parts) == 2:
+                    device_idx = parts[0].strip()
+                    bus_id = parts[1].strip()
+                    pci_to_device_id[bus_id] = device_idx
+            
             # 使用nvidia-smi获取GPU信息
-            cmd = ["nvidia-smi", "--query-compute-apps=pid,gpu_name,used_memory,gpu_bus_id", "--format=csv"]
+            cmd = ["nvidia-smi", "--query-compute-apps=pid,gpu_name,used_memory,gpu_bus_id", "--format=csv,noheader"]
             output = subprocess.check_output(cmd, universal_newlines=True)
             
             # 解析输出
-            lines = output.strip().split('\n')[1:]  # Skip header line
-            for line in lines:
+            for line in output.strip().split('\n'):
+                if not line.strip():
+                    continue
                 parts = line.split(', ')
                 if len(parts) >= 4:
                     try:
                         process_pid = int(parts[0].strip())
                         if process_pid in process_tree_pids:
                             result["gpu_memory"] = parts[2].strip()
-                            result["gpu_bus_id"] = parts[3].strip()
+                            bus_id = parts[3].strip()
+                            result["gpu_bus_id"] = bus_id
+                            
+                            # 将总线ID转换为设备ID
+                            result["gpu_id"] = pci_to_device_id.get(bus_id, "?")
                             break
                     except (ValueError, IndexError):
                         continue
@@ -455,7 +476,8 @@ class ServiceManager:
         import pynvml
         result = {
             "gpu_memory": None,
-            "gpu_bus_id": None
+            "gpu_bus_id": None,
+            "gpu_id": None
         }
         
         try:
@@ -486,6 +508,9 @@ class ServiceManager:
                         if isinstance(bus_id, bytes):
                             bus_id = bus_id.decode('utf-8')
                         result["gpu_bus_id"] = bus_id
+                        
+                        # 直接使用设备索引作为GPU ID
+                        result["gpu_id"] = str(i)
                         break
             
             # 关闭NVML

@@ -90,7 +90,7 @@ def print_service_table(services: List[Dict]):
     table.add_column("cpu", justify="right", width=10)
     table.add_column("mem", justify="right", width=10)
     table.add_column("gpu mem", justify="right", width=10)
-    table.add_column("gpu bus id", justify="right", width=12)
+    table.add_column("gpu id", justify="center", width=6)
     table.add_column("user", width=10)
     
     for index, service in enumerate(services):
@@ -100,7 +100,7 @@ def print_service_table(services: List[Dict]):
         cpu = service.get("cpu", "0%")
         memory = service.get("memory", "0b")
         gpu_memory = service.get("gpu_memory", "-")
-        gpu_bus_id = service.get("gpu_bus_id", "-")
+        gpu_id = service.get("gpu_id", "-")
         status = service["status"]
         
         # Get username if possible
@@ -121,7 +121,7 @@ def print_service_table(services: List[Dict]):
             Text(str(cpu), style=status_style),
             Text(str(memory), style=status_style),
             Text(str(gpu_memory), style=status_style),
-            Text(str(gpu_bus_id), style=status_style),
+            Text(str(gpu_id), style=status_style),
             Text(user, style=status_style),
         )
     
