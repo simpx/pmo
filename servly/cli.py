@@ -208,11 +208,23 @@ def handle_list(manager: ServiceManager) -> bool:
         uptime_seconds = manager.get_uptime(name) if is_running else None
         uptime = manager.format_uptime(uptime_seconds) if is_running else "-"
         
+        # 获取 CPU 和内存使用情况
+        cpu_mem_stats = {}
+        if is_running:
+            stats = manager.get_process_stats(name)
+            cpu_mem_stats["cpu"] = manager.format_cpu_percent(stats["cpu_percent"])
+            cpu_mem_stats["memory"] = manager.format_memory(stats["memory_mb"], stats["memory_percent"])
+        else:
+            cpu_mem_stats["cpu"] = "0%"
+            cpu_mem_stats["memory"] = "0b"
+        
         services.append({
             "name": name,
             "status": "running" if is_running else "stopped",
             "pid": pid,
-            "uptime": uptime
+            "uptime": uptime,
+            "cpu": cpu_mem_stats["cpu"],
+            "memory": cpu_mem_stats["memory"]
         })
     
     # 使用Rich表格显示服务列表

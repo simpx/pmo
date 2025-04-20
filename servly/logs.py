@@ -85,18 +85,24 @@ def print_service_table(services: List[Dict]):
     table.add_column("name", style="cyan")
     table.add_column("pid", justify="right")
     table.add_column("uptime", justify="right")
+    table.add_column("cpu", justify="right")
+    table.add_column("mem", justify="right")
     
     for service in services:
         name = service["name"]
         pid = service["pid"] or "-"
         uptime = service.get("uptime", "-")
+        cpu = service.get("cpu", "0%")
+        memory = service.get("memory", "0b")
         
         status_style = "running" if service["status"] == "running" else "stopped"
         
         table.add_row(
             Text(name, style=status_style),
             Text(str(pid), style=status_style),
-            Text(str(uptime), style=status_style)
+            Text(str(uptime), style=status_style),
+            Text(str(cpu), style=status_style),
+            Text(str(memory), style=status_style)
         )
     
     console.print(table)

@@ -7,9 +7,10 @@ import signal
 import yaml
 import logging
 import time
+import psutil
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Union, List, Optional, Any
+from typing import Dict, Union, List, Optional, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -299,3 +300,50 @@ class ServiceManager:
         """Restart a service."""
         self.stop(service_name)
         return self.start(service_name)
+    
+    def get_process_stats(self, service_name: str) -> Dict[str, Any]:
+        """获取进程的 CPU 和内存使用情况"""
+        pid = self.get_service_pid(service_name)
+        stats = {"cpu_percent": None, "memory_percent": None, "memory_mb": None}
+        
+        if pid:
+            try:
+                process = psutil.Process(pid)
+                # 获取 CPU 使用百分比 (非阻塞模式)
+                stats["cpu_percent"] = process.cpu_percent(interval=0)
+                
+                # 获取内存使用情况
+                memory_info = process.memory_info()
+                stats["memory_mb"] = memory_info.rss / (1024 * 1024)  # 转换为 MB
+                
+                # 计算内存使用百分比
+                stats["memory_percent"] = process.memory_percent()
+                
+                return stats
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                # 如果进程已不存在或无法访问，返回默认值
+                pass
+                
+        return stats
+    
+    def format_cpu_percent(self, cpu_percent: Optional[float]) -> str:
+        """格式化 CPU 使用百分比"""
+        if cpu_percent is None:
+            return "0%"
+        return f"{cpu_percent:.1f}%"
+    
+    def format_memory(self, memory_mb: Optional[float], memory_percent: Optional[float]) -> str:
+        """格式化内存使用情况"""
+        if memory_mb is None:
+            return "0b"
+        
+        # 如果小于 1MB，显示为 KB
+        if memory_mb < 1:
+            return f"{int(memory_mb * 1024)}kb"
+        
+        # 如果大于 1GB，显示为 GB
+        if memory_mb > 1024:
+            return f"{memory_mb/1024:.1f}gb"
+            
+        # 否则显示为 MB
+        return f"{int(memory_mb)}mb"
