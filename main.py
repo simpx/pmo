@@ -1,6 +1,9 @@
-def main():
-    print("Hello World from servly!")
-
+#!/usr/bin/env python3
+"""
+Main module for the Servly process manager.
+"""
+import sys
+from servly.cli import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
