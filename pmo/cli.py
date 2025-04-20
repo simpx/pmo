@@ -49,6 +49,8 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     start_parser = subparsers.add_parser('start', help=f'{Emojis.START} 启动服务')
     start_parser.add_argument('service', nargs='?', default='all', 
                             help='服务名称或 "all" 启动所有服务')
+    start_parser.add_argument('--dryrun', action='store_true',
+                            help='显示将要执行的命令但不实际执行')
     
     # Stop 命令
     stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} 停止服务')
@@ -74,7 +76,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     return parser
 
-def handle_start(manager: ServiceManager, service_name: str) -> bool:
+def handle_start(manager: ServiceManager, service_name: str, dryrun: bool = False) -> bool:
     """处理启动命令"""
     if service_name == 'all':
         service_names = manager.get_service_names()
@@ -82,26 +84,31 @@ def handle_start(manager: ServiceManager, service_name: str) -> bool:
             print_warning("配置中没有定义任何服务。")
             return False
         
-        console.print(f"{Emojis.START} 正在启动所有服务...", style="running")
+        if dryrun:
+            console.print(f"{Emojis.INFO} 以下是将要执行的命令（不会实际执行）:", style="running")
+        else:
+            console.print(f"{Emojis.START} 正在启动所有服务...", style="running")
+            
         success = True
         for name in service_names:
-            if not manager.start(name):
+            if not manager.start(name, dryrun=dryrun):
                 print_error(f"启动服务 '{name}' 失败")
                 success = False
             else:
-                print_success(f"服务 '{name}' 已成功启动")
+                if not dryrun:
+                    print_success(f"服务 '{name}' 已成功启动")
         
-        if success:
+        if success and not dryrun:
             print_success("所有服务已成功启动！")
-        else:
+        elif not success:
             print_warning("有些服务启动失败，请检查日志获取详情。")
         
         return success
     else:
-        result = manager.start(service_name)
-        if result:
+        result = manager.start(service_name, dryrun=dryrun)
+        if result and not dryrun:
             print_success(f"服务 '{service_name}' 已成功启动")
-        else:
+        elif not result:
             print_error(f"启动服务 '{service_name}' 失败")
         return result
 
@@ -263,7 +270,7 @@ def main():
     # 处理命令
     try:
         if args.command == 'start':
-            success = handle_start(service_manager, args.service)
+            success = handle_start(service_manager, args.service, args.dryrun)
         elif args.command == 'stop':
             success = handle_stop(service_manager, args.service)
         elif args.command == 'restart':

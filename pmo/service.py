@@ -12,6 +12,8 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Union, List, Optional, Any, Tuple
 
+from pmo.logs import console
+
 logger = logging.getLogger(__name__)
 
 class ServiceManager:
@@ -189,13 +191,19 @@ class ServiceManager:
         """Get list of currently running services."""
         return [name for name in self.get_service_names() if self.is_running(name)]
     
-    def start(self, service_name: str) -> bool:
-        """Start a specified service."""
+    def start(self, service_name: str, dryrun: bool = False) -> bool:
+        """
+        Start a specified service.
+        
+        Args:
+            service_name: 服务名称
+            dryrun: 若为True，只返回将要执行的命令而不实际执行
+        """
         if service_name not in self.services:
             logger.error(f"Service '{service_name}' not found in configuration.")
             return False
             
-        if self.is_running(service_name):
+        if self.is_running(service_name) and not dryrun:
             logger.info(f"Service '{service_name}' is already running.")
             return True
             
@@ -206,13 +214,39 @@ class ServiceManager:
             return False
             
         # Prepare environment variables
-        env = os.environ.copy()
+        env = {}
         if "env" in config and isinstance(config["env"], dict):
             config_env = {k: str(v) for k, v in config["env"].items()}
             env.update(config_env)
             
         # Prepare working directory
-        cwd = config.get("cwd", os.getcwd())
+        cwd = config.get("cwd", None)
+        
+        if dryrun:
+            # 构造将要执行的命令字符串，但不执行
+            cmd_str = ""
+            
+            # 如果指定了工作目录，添加cd命令
+            if cwd:
+                cmd_str += f"cd {cwd} && "
+            
+            # 添加环境变量
+            if env:
+                env_str = " ".join([f"{key}={value}" for key, value in env.items()])
+                if env_str:
+                    cmd_str += f"{env_str} "
+            
+            # 添加实际命令和参数
+            cmd_str += cmd
+            
+            # 打印命令但不执行
+            console.print(f"[bold cyan]{service_name}[/]: {cmd_str}")
+            return True
+        
+        # 非dryrun模式下的实际执行代码
+        env_copy = os.environ.copy()
+        if env:
+            env_copy.update(env)
         
         # Prepare log files
         stdout_log = self.log_dir / f"{service_name}-out.log"
@@ -232,7 +266,7 @@ class ServiceManager:
                     stdout=out,
                     stderr=err,
                     cwd=cwd,
-                    env=env,
+                    env=env_copy,
                     start_new_session=True  # Detach from current process group
                 )
                 
