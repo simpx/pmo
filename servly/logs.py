@@ -4,17 +4,29 @@ Log management functionality for Servly.
 import os
 import sys
 import time
-import select
-import fcntl
-import termios
-import subprocess
 import re
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 import random
 
+# Rich库导入
+from rich.console import Console
+from rich.theme import Theme
 
-# ANSI 颜色代码
+# 自定义Rich主题，定义我们需要的颜色样式
+custom_theme = Theme({
+    "warning": "yellow",
+    "error": "bold red",
+    "info": "green",
+    "dim": "dim",
+    "stdout_service": "green",
+    "stderr_service": "red",
+})
+
+# 创建Rich控制台对象
+console = Console(theme=custom_theme)
+
+# ANSI 颜色代码 - 保留以确保兼容性
 class Colors:
     RESET = "\033[0m"
     BOLD = "\033[1m"
@@ -67,7 +79,7 @@ class Emojis:
     LOADING = "⏳"
 
 
-# 处理彩色文本对齐的辅助函数
+# 处理彩色文本对齐的辅助函数 - 保留以确保兼容性
 def strip_ansi_codes(text: str) -> str:
     """删除字符串中的所有 ANSI 转义代码"""
     ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -115,13 +127,6 @@ class LogManager:
     
     def __init__(self, log_dir: Path):
         self.log_dir = log_dir
-        # 为每个服务分配一个固定颜色，使日志更易读
-        self.service_colors = {}
-        self.available_colors = [
-            Colors.GREEN, Colors.YELLOW, Colors.BLUE, Colors.MAGENTA, Colors.CYAN,
-            Colors.BRIGHT_GREEN, Colors.BRIGHT_YELLOW, Colors.BRIGHT_BLUE, 
-            Colors.BRIGHT_MAGENTA, Colors.BRIGHT_CYAN
-        ]
         self.default_tail_lines = 15  # 默认展示最后15行日志
         
     def get_log_files(self, service_name: str) -> Dict[str, Path]:
@@ -131,47 +136,30 @@ class LogManager:
             'stderr': self.log_dir / f"{service_name}-error.log"
         }
     
-    def _get_service_color(self, service_name: str) -> str:
-        """为服务分配一个固定的颜色"""
-        if service_name not in self.service_colors:
-            if not self.available_colors:
-                # 如果颜色用完了，就随机分配
-                self.service_colors[service_name] = random.choice([
-                    Colors.GREEN, Colors.YELLOW, Colors.BLUE, Colors.MAGENTA, Colors.CYAN
-                ])
-            else:
-                # 从可用颜色中选择一个
-                self.service_colors[service_name] = self.available_colors.pop(0)
-        return self.service_colors[service_name]
-    
     def _format_log_header(self, service: str, log_type: str) -> str:
-        """格式化日志头部，PM2格式"""
-        # 获取文件路径用于显示
+        """格式化日志头部为PM2风格"""
         log_files = self.get_log_files(service)
         file_path = log_files[log_type]
         file_path_str = str(file_path)
         
-        # PM2风格的头部
-        return f"\n{Colors.BRIGHT_BLACK}{file_path_str} last {self.default_tail_lines} lines:{Colors.RESET}"
+        # PM2风格的头部（使用rich来打印，不需要返回格式化字符串）
+        return file_path_str
     
-    def _format_log_line(self, service: str, log_type: str, line: str, show_timestamp: bool = True) -> str:
-        """格式化单行日志，PM2格式"""
-        # 使用红色显示stderr的服务名称，绿色显示stdout的服务名称
-        service_color = Colors.RED if log_type == 'stderr' else Colors.GREEN
+    def _parse_log_line(self, line: str) -> Tuple[str, str]:
+        """解析日志行，提取时间戳和内容"""
         timestamp = ""
+        content = line.rstrip()
         
-        # 尝试提取时间戳，或保持原来的行
+        # 尝试提取时间戳
         timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})', line)
         if timestamp_match:
             timestamp = timestamp_match.group(1)
             # 移除行中已有的时间戳部分
-            rest_of_line = line.replace(timestamp, "", 1).lstrip()
+            content = line.replace(timestamp, "", 1).lstrip().rstrip()
         else:
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            rest_of_line = line
         
-        # PM2风格的行格式：服务名 | 时间: 内容
-        return f"{service_color}{service}{Colors.RESET} | {timestamp}: {rest_of_line.rstrip()}"
+        return timestamp, content
     
     def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None):
         """
@@ -186,7 +174,7 @@ class LogManager:
             lines = self.default_tail_lines
             
         if not service_names:
-            print(f"{Emojis.WARNING} {Colors.YELLOW}No services specified for log viewing.{Colors.RESET}")
+            console.print(f"{Emojis.WARNING} No services specified for log viewing.", style="warning")
             return
 
         # Check if the logs exist
@@ -197,11 +185,11 @@ class LogManager:
                 if log_path.exists():
                     log_files.append((service, log_type, log_path))
                 else:
-                    service_color = Colors.RED if log_type == 'stderr' else Colors.GREEN
-                    print(f"{Emojis.WARNING} {Colors.YELLOW}No {log_type} logs found for {service_color}{service}{Colors.RESET}.")
+                    style = "stderr_service" if log_type == "stderr" else "stdout_service" 
+                    console.print(f"{Emojis.WARNING} No {log_type} logs found for [{style}]{service}[/].", style="warning")
                     
         if not log_files:
-            print(f"{Emojis.WARNING} {Colors.YELLOW}No log files found for specified services.{Colors.RESET}")
+            console.print(f"{Emojis.WARNING} No log files found for specified services.", style="warning")
             return
             
         if follow:
@@ -214,7 +202,9 @@ class LogManager:
     def _display_recent_logs(self, log_files: List[Tuple[str, str, Path]], lines: int):
         """Display the most recent lines from log files."""
         for service, log_type, log_path in log_files:
-            print(self._format_log_header(service, log_type))
+            file_path_str = self._format_log_header(service, log_type)
+            console.print(f"\n[dim]{file_path_str} last {self.default_tail_lines} lines:[/]")
+            
             try:
                 # 读取最后N行
                 with open(log_path, 'r') as f:
@@ -223,9 +213,11 @@ class LogManager:
                     
                     # 打印每一行，增加格式
                     for line in last_lines:
-                        print(self._format_log_line(service, log_type, line, show_timestamp=False))
+                        timestamp, message = self._parse_log_line(line)
+                        style = "stderr_service" if log_type == "stderr" else "stdout_service"
+                        console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
             except Exception as e:
-                print(f"{Emojis.ERROR} {Colors.RED}Error reading logs: {str(e)}{Colors.RESET}")
+                console.print(f"{Emojis.ERROR} Error reading logs: {str(e)}", style="error")
     
     def _follow_logs(self, log_files: List[Tuple[str, str, Path]]):
         """Follow logs in real-time, similar to tail -f."""
@@ -240,7 +232,7 @@ class LogManager:
                 f.seek(0, os.SEEK_END)
                 file_handlers[(service, log_type)] = f
                 
-            print(f"\n{Colors.BRIGHT_BLACK}Following logs... (Ctrl+C to stop){Colors.RESET}")
+            console.print(f"\n[dim]Following logs... (Ctrl+C to stop)[/]")
             
             while True:
                 has_new_data = False
@@ -249,13 +241,15 @@ class LogManager:
                     line = f.readline()
                     if line:
                         has_new_data = True
-                        print(self._format_log_line(service, log_type, line))
+                        timestamp, message = self._parse_log_line(line)
+                        style = "stderr_service" if log_type == "stderr" else "stdout_service"
+                        console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
                 
                 if not has_new_data:
                     time.sleep(0.1)
                     
         except KeyboardInterrupt:
-            print(f"\n{Colors.BRIGHT_BLACK}Stopped following logs.{Colors.RESET}")
+            console.print(f"\n[dim]Stopped following logs.[/]")
         finally:
             # Close all file handlers
             for f in file_handlers.values():
