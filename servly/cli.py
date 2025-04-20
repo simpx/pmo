@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Command-line interface for Servly process manager.
+Command-line interface for PMO process manager.
 使用Rich库进行终端输出格式化
 """
 import os
@@ -10,9 +10,9 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Optional
 
-from servly.service import ServiceManager
-from servly.logs import LogManager, Emojis
-from servly.logs import console, print_header, print_info, print_warning, print_error, print_success, print_service_table
+from pmo.service import ServiceManager
+from pmo.logs import LogManager, Emojis
+from pmo.logs import console, print_header, print_info, print_warning, print_error, print_success, print_service_table
 
 from rich.logging import RichHandler
 from rich.traceback import install
@@ -29,19 +29,19 @@ logging.basicConfig(
     handlers=[RichHandler(rich_tracebacks=True, markup=True)]
 )
 
-logger = logging.getLogger("servly")
+logger = logging.getLogger("pmo")
 
 def setup_arg_parser() -> argparse.ArgumentParser:
     """设置命令行参数解析器"""
     parser = argparse.ArgumentParser(
-        description=f"{Emojis.SERVICE} Servly - Modern process manager",
+        description=f"{Emojis.SERVICE} PMO - Modern process manager",
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
     # 全局参数
     parser.add_argument('-f', '--config', 
-                      help='配置文件路径 (默认: servly.yml)',
-                      default='servly.yml')
+                      help='配置文件路径 (默认: pmo.yml)',
+                      default='pmo.yml')
     
     subparsers = parser.add_subparsers(dest='command', help='要执行的命令')
     
@@ -240,7 +240,7 @@ def handle_list(manager: ServiceManager) -> bool:
 def main():
     """CLI 应用程序入口点"""
     # 移除显示头部
-    # print_header("SERVLY - Modern Process Manager")
+    # print_header("PMO - Modern Process Manager")
     
     parser = setup_arg_parser()
     args = parser.parse_args()

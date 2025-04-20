@@ -1,10 +1,10 @@
-# SERVLY
+# PMO
 
 A simple process management tool for Linux, similar to PM2, designed to simplify application deployment and management.
 
 ## Features
 
-- Start, stop, and restart services defined in a `servly.yml` configuration file
+- Start, stop, and restart services defined in a `pmo.yml` configuration file
 - View real-time logs with service name highlighting
 - Automatic process supervision and PID management
 - Environment variable support
@@ -14,11 +14,11 @@ A simple process management tool for Linux, similar to PM2, designed to simplify
 
 ```bash
 # Using pip
-pip install servly
+pip install pmo
 
 # From source
-git clone https://github.com/yourusername/servly.git
-cd servly
+git clone https://github.com/yourusername/pmo.git
+cd pmo
 pip install -e .
 ```
 
@@ -26,7 +26,7 @@ pip install -e .
 
 ### Quick Start
 
-1. Create a `servly.yml` file in your project:
+1. Create a `pmo.yml` file in your project:
 
 ```yaml
 # Basic format: service-name: command
@@ -43,46 +43,46 @@ api:
 2. Start your services:
 
 ```bash
-servly start
+pmo start
 ```
 
 ### Core Commands
 
 - **Start Services**:
   ```bash
-  servly start [all | service-name]
+  pmo start [all | service-name]
   ```
   Starts all services or a specific service by name.
 
 - **Stop Services**:
   ```bash
-  servly stop [all | service-name]
+  pmo stop [all | service-name]
   ```
   Stops all running services or a specific service by name.
 
 - **Restart Services**:
   ```bash
-  servly restart [all | service-name]
+  pmo restart [all | service-name]
   ```
   Restarts all services or a specific service by name.
 
 - **View Service Logs**:
   ```bash
-  servly log [all | service-name]
+  pmo log [all | service-name]
   ```
   Shows logs in real-time (similar to `tail -f`).
 
 - **List Services**:
   ```bash
-  servly list
+  pmo ps
   ```
   Shows status of all configured services.
 
 ## Configuration
 
-### servly.yml
+### pmo.yml
 
-The `servly.yml` file supports two formats:
+The `pmo.yml` file supports two formats:
 
 1. **Simple format**:
    ```yaml
@@ -99,14 +99,14 @@ The `servly.yml` file supports two formats:
        ENV_VAR2: value2
    ```
 
-**Note**: The name "servly" is reserved and cannot be used as a service name.
+**Note**: The name "pmo" is reserved and cannot be used as a service name.
 
 ### Directory Structure
 
-Servly creates a `.servly` directory to store runtime information:
+PMO creates a `.pmo` directory to store runtime information:
 
 ```
-.servly/
+.pmo/
 ├── logs/
 │   ├── [service-name]-out.log    # Standard output logs
 │   └── [service-name]-error.log  # Error logs

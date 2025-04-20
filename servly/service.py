@@ -1,5 +1,5 @@
 """
-Service management functionality for Servly.
+Service management functionality for PMO.
 """
 import os
 import subprocess
@@ -15,15 +15,15 @@ from typing import Dict, Union, List, Optional, Any, Tuple
 logger = logging.getLogger(__name__)
 
 class ServiceManager:
-    """Manages processes based on servly.yml configuration."""
+    """Manages processes based on pmo.yml configuration."""
     
-    def __init__(self, config_path: str = "servly.yml", servly_dir: str = ".servly"):
+    def __init__(self, config_path: str = "pmo.yml", pmo_dir: str = ".pmo"):
         self.config_path = config_path
         # 修改为使用配置文件所在目录
         config_dir = os.path.dirname(os.path.abspath(config_path))
-        self.servly_dir = Path(config_dir) / servly_dir
-        self.pid_dir = self.servly_dir / "pids"
-        self.log_dir = self.servly_dir / "logs"
+        self.pmo_dir = Path(config_dir) / pmo_dir
+        self.pid_dir = self.pmo_dir / "pids"
+        self.log_dir = self.pmo_dir / "logs"
         # 存储服务启动时间，用于计算运行时长
         self.start_times = {}
         self._ensure_dirs()
@@ -55,7 +55,7 @@ class ServiceManager:
                     self.start_times[service_name] = time.time()
         
     def _load_config(self) -> Dict[str, Any]:
-        """Load service configurations from servly.yml."""
+        """Load service configurations from pmo.yml."""
         if not os.path.exists(self.config_path):
             logger.error(f"Configuration file not found: {self.config_path}")
             return {}
@@ -67,8 +67,8 @@ class ServiceManager:
             # Validate config and convert simple format to detailed format
             validated_config = {}
             for name, conf in config.items():
-                if name.lower() == "servly":
-                    logger.warning(f"'servly' is a reserved name and cannot be used as a service name.")
+                if name.lower() == "pmo":
+                    logger.warning(f"'pmo' is a reserved name and cannot be used as a service name.")
                     continue
                     
                 if isinstance(conf, str):

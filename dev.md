@@ -1,20 +1,20 @@
-# Servly Development Guide
+# PMO Development Guide
 
-Servly is a process management tool similar to PM2, designed to simplify application deployment and management.
+PMO is a process management tool similar to PM2, designed to simplify application deployment and management.
 
 ## Overview
 
-Servly manages processes based on:
-- Configuration in `servly.yml` file in the current directory
+PMO manages processes based on:
+- Configuration in `pmo.yml` file in the current directory
 - Environment variables from `.env` file
-- Runtime information stored in `.servly` directory
+- Runtime information stored in `.pmo` directory
 
 ## Directory Structure
 
-The `.servly` directory stores all runtime information:
+The `.pmo` directory stores all runtime information:
 
 ```
-.servly/
+.pmo/
 ├── logs/
 │   ├── [service-name]-out.log    # Standard output logs
 │   └── [service-name]-error.log  # Error logs
@@ -27,15 +27,15 @@ The `.servly` directory stores all runtime information:
 ### Starting Services
 
 ```bash
-servly start [all | service-name]
+pmo start [all | service-name]
 ```
 
-Starts all services defined in `servly.yml` or a specific service by name.
+Starts all services defined in `pmo.yml` or a specific service by name.
 
 ### Stopping Services
 
 ```bash
-servly stop [all | service-name]
+pmo stop [all | service-name]
 ```
 
 Stops all running services or a specific service by name.
@@ -43,7 +43,7 @@ Stops all running services or a specific service by name.
 ### Viewing Logs
 
 ```bash
-servly log [all | service-name]
+pmo log [all | service-name]
 ```
 
 Displays logs in real-time (similar to `tail -f`):
@@ -53,16 +53,16 @@ Displays logs in real-time (similar to `tail -f`):
 ### Restarting Services
 
 ```bash
-servly restart [all | service-name]
+pmo restart [all | service-name]
 ```
 
 Restarts all services or a specific service by name.
 
 ## Configuration
 
-### servly.yml
+### pmo.yml
 
-Servly supports both simple command format and detailed configuration:
+PMO supports both simple command format and detailed configuration:
 
 ```yaml
 # Basic usage - directly specify command
@@ -78,7 +78,7 @@ app2:
 
 The basic format `app-name: command` allows for quick and simple service definition without additional configuration.
 
-**Note:** The name "servly" is reserved and cannot be used as an application name, to avoid conflicts with internal configuration directives.
+**Note:** The name "pmo" is reserved and cannot be used as an application name, to avoid conflicts with internal configuration directives.
 
 Examples:
 
@@ -88,7 +88,7 @@ web-server: node server.js
 api: python api.py
 
 # Invalid - using reserved name
-servly: node app.js  # This will not work as expected
+pmo: node app.js  # This will not work as expected
 ```
 
 ### Environment Variables
@@ -97,8 +97,8 @@ Environment variables in `.env` file are automatically loaded and available to a
 
 ## Development Workflow
 
-1. Define services in `servly.yml`
+1. Define services in `pmo.yml`
 2. Set environment variables in `.env` if needed
-3. Use `servly start` to launch services
-4. Monitor with `servly log`
+3. Use `pmo start` to launch services
+4. Monitor with `pmo log`
 5. Restart or stop as needed

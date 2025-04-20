@@ -1,5 +1,5 @@
 """
-Log management functionality for Servly.
+Log management functionality for PMO.
 使用Rich库进行日志格式化和展示，实现PM2风格的日志效果。
 """
 import os
