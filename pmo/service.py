@@ -208,7 +208,8 @@ class ServiceManager:
         # Prepare environment variables
         env = os.environ.copy()
         if "env" in config and isinstance(config["env"], dict):
-            env.update(config["env"])
+            config_env = {k: str(v) for k, v in config["env"].items()}
+            env.update(config_env)
             
         # Prepare working directory
         cwd = config.get("cwd", os.getcwd())
