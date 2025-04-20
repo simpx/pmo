@@ -15,6 +15,7 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.table import Table
 from rich.live import Live
+from rich import box
 
 # 自定义Rich主题
 custom_theme = Theme({
@@ -77,25 +78,25 @@ def print_success(message: str):
     console.print(f"{Emojis.RUNNING} {message}", style="running")
 
 def print_service_table(services: List[Dict]):
-    """打印服务状态表格"""
-    table = Table(show_header=True, header_style="header", expand=True)
-    table.add_column("名称", style="cyan")
-    table.add_column("状态")
-    table.add_column("PID")
+    """打印服务状态表格，PM2风格紧凑布局"""
+    table = Table(show_header=True, header_style="header", expand=True, box=box.SIMPLE)
+    
+    # PM2风格紧凑表头
+    table.add_column("name", style="cyan")
+    table.add_column("pid", justify="right")
+    table.add_column("uptime", justify="right")
     
     for service in services:
         name = service["name"]
-        status = service["status"]
         pid = service["pid"] or "-"
+        uptime = service.get("uptime", "-")
         
-        status_style = "running" if status == "running" else "stopped"
-        status_emoji = Emojis.RUNNING if status == "running" else Emojis.STOPPED
-        status_text = f"{status_emoji} {status.upper()}"
+        status_style = "running" if service["status"] == "running" else "stopped"
         
         table.add_row(
-            name,
-            Text(status_text, style=status_style),
-            Text(str(pid), style=status_style)
+            Text(name, style=status_style),
+            Text(str(pid), style=status_style),
+            Text(str(uptime), style=status_style)
         )
     
     console.print(table)

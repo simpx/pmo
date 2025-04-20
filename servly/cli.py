@@ -204,10 +204,15 @@ def handle_list(manager: ServiceManager) -> bool:
         is_running = manager.is_running(name)
         pid = manager.get_service_pid(name)
         
+        # 获取服务运行时间
+        uptime_seconds = manager.get_uptime(name) if is_running else None
+        uptime = manager.format_uptime(uptime_seconds) if is_running else "-"
+        
         services.append({
             "name": name,
             "status": "running" if is_running else "stopped",
-            "pid": pid
+            "pid": pid,
+            "uptime": uptime
         })
     
     # 使用Rich表格显示服务列表

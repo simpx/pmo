@@ -8,6 +8,7 @@ import yaml
 import logging
 import time
 from pathlib import Path
+from datetime import datetime
 from typing import Dict, Union, List, Optional, Any
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,35 @@ class ServiceManager:
         self.servly_dir = Path(config_dir) / servly_dir
         self.pid_dir = self.servly_dir / "pids"
         self.log_dir = self.servly_dir / "logs"
+        # 存储服务启动时间，用于计算运行时长
+        self.start_times = {}
         self._ensure_dirs()
         self.services = self._load_config()
+        # 加载现有的服务启动时间
+        self._load_start_times()
         
     def _ensure_dirs(self):
         """Create required directories if they don't exist."""
         self.pid_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _load_start_times(self):
+        """加载已运行服务的启动时间"""
+        for service_name in self.get_service_names():
+            if self.is_running(service_name):
+                # 尝试从文件获取启动时间，如果没有则使用当前时间
+                start_time_file = self.pid_dir / f"{service_name}.time"
+                if start_time_file.exists():
+                    try:
+                        with open(start_time_file, "r") as f:
+                            timestamp = float(f.read().strip())
+                            self.start_times[service_name] = timestamp
+                    except (ValueError, IOError):
+                        # 如果文件无法读取或格式不正确，使用当前时间
+                        self.start_times[service_name] = time.time()
+                else:
+                    # 如果没有时间文件，使用当前时间
+                    self.start_times[service_name] = time.time()
         
     def _load_config(self) -> Dict[str, Any]:
         """Load service configurations from servly.yml."""
@@ -83,9 +106,44 @@ class ServiceManager:
             else:
                 # Clean up stale PID file
                 os.remove(pid_file)
+                # 删除相关的启动时间记录
+                if service_name in self.start_times:
+                    del self.start_times[service_name]
+                start_time_file = self.pid_dir / f"{service_name}.time"
+                if start_time_file.exists():
+                    os.remove(start_time_file)
                 return None
         except (ValueError, FileNotFoundError):
             return None
+    
+    def get_uptime(self, service_name: str) -> Optional[float]:
+        """获取服务运行时间（以秒为单位）"""
+        if service_name in self.start_times and self.is_running(service_name):
+            return time.time() - self.start_times[service_name]
+        return None
+    
+    def format_uptime(self, uptime_seconds: Optional[float]) -> str:
+        """将运行时间格式化为易读格式"""
+        if uptime_seconds is None:
+            return "-"
+        
+        # 转换为整数秒
+        seconds = int(uptime_seconds)
+        
+        # 计算天、小时、分钟、秒
+        days, seconds = divmod(seconds, 86400)
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        
+        # 格式化为易读字符串
+        if days > 0:
+            return f"{days}d {hours}h"
+        elif hours > 0:
+            return f"{hours}h {minutes}m"
+        elif minutes > 0:
+            return f"{minutes}m {seconds}s"
+        else:
+            return f"{seconds}s"
     
     def _is_process_running(self, pid: int) -> bool:
         """Check if process with given PID is running."""
@@ -160,6 +218,15 @@ class ServiceManager:
             with open(self.get_pid_file(service_name), 'w') as f:
                 f.write(str(process.pid))
                 
+            # 记录启动时间
+            start_time = time.time()
+            self.start_times[service_name] = start_time
+            
+            # 保存启动时间到文件
+            start_time_file = self.pid_dir / f"{service_name}.time"
+            with open(start_time_file, 'w') as f:
+                f.write(str(start_time))
+                
             logger.info(f"Started service '{service_name}' with PID {process.pid}")
             return True
             
@@ -194,6 +261,15 @@ class ServiceManager:
             if os.path.exists(pid_file):
                 os.remove(pid_file)
                 
+            # 清理启动时间记录
+            if service_name in self.start_times:
+                del self.start_times[service_name]
+            
+            # 删除启动时间文件
+            start_time_file = self.pid_dir / f"{service_name}.time"
+            if start_time_file.exists():
+                os.remove(start_time_file)
+                
             logger.info(f"Stopped service '{service_name}'")
             return True
             
@@ -202,6 +278,16 @@ class ServiceManager:
             pid_file = self.get_pid_file(service_name)
             if os.path.exists(pid_file):
                 os.remove(pid_file)
+            
+            # 清理启动时间记录
+            if service_name in self.start_times:
+                del self.start_times[service_name]
+            
+            # 删除启动时间文件
+            start_time_file = self.pid_dir / f"{service_name}.time"
+            if start_time_file.exists():
+                os.remove(start_time_file)
+                
             logger.info(f"Service '{service_name}' was not running")
             return True
             
