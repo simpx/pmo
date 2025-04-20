@@ -13,9 +13,9 @@ import psutil
 from pathlib import Path
 from unittest.mock import patch
 
-from servly.service import ServiceManager
-from servly.logs import LogManager
-from servly.cli import handle_start, handle_stop, handle_list, handle_log
+from pmo.service import ServiceManager
+from pmo.logs import LogManager
+from pmo.cli import handle_start, handle_stop, handle_list, handle_log
 
 class TestFullServiceLifecycle:
     """测试服务的完整生命周期，从创建配置，启动到停止"""
@@ -26,7 +26,7 @@ class TestFullServiceLifecycle:
         # 创建一个临时目录
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            config_path = temp_path / 'test_servly.yml'
+            config_path = temp_path / 'test_pmo.yml'
             
             # 创建一个简单的长期运行测试脚本
             script_path = temp_path / 'test_long_running.py'

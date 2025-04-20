@@ -15,12 +15,12 @@ def temp_dir():
     old_cwd = os.getcwd()
     os.chdir(tmp_dir)
     
-    # 确保 .servly 目录的父目录存在
-    servly_dir = Path(tmp_dir) / '.servly'
-    servly_dir.mkdir(exist_ok=True)
-    logs_dir = servly_dir / 'logs'
+    # 确保 .pmo 目录的父目录存在
+    pmo_dir = Path(tmp_dir) / '.pmo'
+    pmo_dir.mkdir(exist_ok=True)
+    logs_dir = pmo_dir / 'logs'
     logs_dir.mkdir(exist_ok=True)
-    pids_dir = servly_dir / 'pids'
+    pids_dir = pmo_dir / 'pids'
     pids_dir.mkdir(exist_ok=True)
     
     yield tmp_dir
@@ -40,7 +40,7 @@ def basic_config_file(temp_dir):
         }
     }
     
-    config_path = Path(temp_dir) / 'servly.yml'
+    config_path = Path(temp_dir) / 'pmo.yml'
     with open(config_path, 'w') as f:
         yaml.dump(config, f)
     
@@ -56,7 +56,7 @@ def custom_config_file(temp_dir):
             'cwd': '.',
             'env': {'CUSTOM_ENV': 'custom_value'}
         },
-        'servly': 'echo "This should be ignored"'  # 测试保留名称
+        'pmo': 'echo "This should be ignored"'  # 测试保留名称
     }
     
     config_path = Path(temp_dir) / 'custom.yml'

@@ -4,13 +4,13 @@
 import pytest
 import os
 from pathlib import Path
-from servly.service import ServiceManager
+from pmo.service import ServiceManager
 
 class TestConfigLoading:
     """测试配置文件加载功能"""
     
     def test_default_config_loading(self, basic_config_file):
-        """TC1.1: 验证默认配置文件 servly.yml 加载"""
+        """TC1.1: 验证默认配置文件 pmo.yml 加载"""
         # 创建服务管理器并加载配置
         manager = ServiceManager(config_path=basic_config_file)
         
@@ -29,8 +29,8 @@ class TestConfigLoading:
         service_names = manager.get_service_names()
         assert 'custom-echo' in service_names
         assert 'custom-sleep' in service_names
-        # 保留名称 "servly" 应被忽略
-        assert 'servly' not in service_names
+        # 保留名称 "pmo" 应被忽略
+        assert 'pmo' not in service_names
         assert len(service_names) == 2
     
     def test_config_format_parsing(self, basic_config_file):

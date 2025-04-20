@@ -219,7 +219,7 @@ class TestReservedName:
         # 创建带有保留名称的配置
         config = {
             'normal-service': 'echo "Normal service"',
-            'servly': 'echo "Reserved name service"'
+            'pmo': 'echo "Reserved name service"'
         }
         
         config_path = Path(temp_dir) / 'reserved_test.yml'
@@ -232,7 +232,7 @@ class TestReservedName:
             # 验证保留名称服务被忽略
             service_names = manager.get_service_names()
             assert 'normal-service' in service_names
-            assert 'servly' not in service_names
+            assert 'pmo' not in service_names
             
             # 验证是否记录了警告
             mock_log.assert_called_once()
@@ -242,12 +242,12 @@ class TestDirectoryStructure:
     """测试目录结构验证"""
     
     def test_directory_structure(self, temp_dir):
-        """TC7.1: 验证 .servly 目录结构"""
+        """TC7.1: 验证 .pmo 目录结构"""
         # 创建服务管理器
         manager = ServiceManager()
         
         # 验证目录结构是否正确
-        assert manager.servly_dir.exists()
+        assert manager.pmo_dir.exists()
         assert manager.pid_dir.exists()
         assert manager.log_dir.exists()
     

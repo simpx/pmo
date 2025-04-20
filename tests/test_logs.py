@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 from contextlib import redirect_stdout
 from unittest.mock import patch, MagicMock, call
-from servly.logs import LogManager
-from servly.service import ServiceManager
+from pmo.logs import LogManager
+from pmo.service import ServiceManager
 
 class TestLogging:
     """测试日志功能"""
@@ -17,7 +17,7 @@ class TestLogging:
     def setup_method(self):
         """设置基本测试环境"""
         self.temp_dir = Path(os.getcwd())
-        self.log_dir = self.temp_dir / '.servly' / 'logs'
+        self.log_dir = self.temp_dir / '.pmo' / 'logs'
         self.log_dir.mkdir(exist_ok=True, parents=True)
         
         # 创建测试日志文件
@@ -38,8 +38,8 @@ class TestLogging:
         assert log_files['stdout'].exists()
         assert log_files['stderr'].exists()
     
-    @patch('servly.logs.LogManager._follow_logs')
-    @patch('servly.logs.LogManager._display_recent_logs')
+    @patch('pmo.logs.LogManager._follow_logs')
+    @patch('pmo.logs.LogManager._display_recent_logs')
     def test_log_all_services(self, mock_display, mock_follow, basic_config_file):
         """TC3.2: 测试查看所有服务的日志"""
         manager = ServiceManager(config_path=basic_config_file)
@@ -59,8 +59,8 @@ class TestLogging:
         args.lines = 10
         
         # 打补丁到 LogManager 的 tail_logs 方法
-        with patch('servly.logs.LogManager.tail_logs') as mock_tail_logs:
-            from servly.cli import handle_log
+        with patch('pmo.logs.LogManager.tail_logs') as mock_tail_logs:
+            from pmo.cli import handle_log
             
             # 创建一个真实的 LogManager 对象
             log_manager = LogManager(manager.log_dir)
@@ -76,8 +76,8 @@ class TestLogging:
             call_args = mock_tail_logs.call_args[0][0]
             assert set(call_args) == {'test-echo', 'test-sleep'}
     
-    @patch('servly.logs.LogManager._follow_logs')
-    @patch('servly.logs.LogManager._display_recent_logs')
+    @patch('pmo.logs.LogManager._follow_logs')
+    @patch('pmo.logs.LogManager._display_recent_logs')
     def test_no_follow_option(self, mock_display, mock_follow):
         """TC3.3: 测试不跟随日志的选项（--no-follow）"""
         log_manager = LogManager(self.log_dir)
@@ -94,8 +94,8 @@ class TestLogging:
         assert len(args) > 0
         assert args[1] == 10  # 验证行数参数
     
-    @patch('servly.logs.LogManager._follow_logs')
-    @patch('servly.logs.LogManager._display_recent_logs')
+    @patch('pmo.logs.LogManager._follow_logs')
+    @patch('pmo.logs.LogManager._display_recent_logs')
     def test_lines_option(self, mock_display, mock_follow):
         """TC3.4: 测试指定显示行数（--lines）"""
         log_manager = LogManager(self.log_dir)

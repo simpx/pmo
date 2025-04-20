@@ -8,7 +8,7 @@ import signal
 import psutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from servly.service import ServiceManager
+from pmo.service import ServiceManager
 
 class TestServiceManagement:
     """测试服务管理功能"""
@@ -41,7 +41,7 @@ class TestServiceManagement:
         # 启动所有服务
         with patch.object(manager, 'start') as mock_start:
             mock_start.return_value = True
-            from servly.cli import handle_start
+            from pmo.cli import handle_start
             result = handle_start(manager, 'all')
             assert result is True
             
@@ -68,7 +68,7 @@ class TestServiceManagement:
             result = manager.stop('test-sleep')
             assert result is True
     
-    @patch('servly.service.ServiceManager.stop')
+    @patch('pmo.service.ServiceManager.stop')
     def test_stop_all_services(self, mock_stop, basic_config_file):
         """TC2.4: 测试停止所有服务"""
         manager = ServiceManager(config_path=basic_config_file)
@@ -77,7 +77,7 @@ class TestServiceManagement:
         mock_stop.return_value = True
         
         with patch.object(manager, 'get_running_services', return_value=['test-echo', 'test-sleep']):
-            from servly.cli import handle_stop
+            from pmo.cli import handle_stop
             result = handle_stop(manager, 'all')
             assert result is True
             
@@ -88,8 +88,8 @@ class TestServiceManagement:
             service_names = set([call[0][0] for call in mock_stop.call_args_list])
             assert service_names == {'test-echo', 'test-sleep'}
     
-    @patch('servly.service.ServiceManager.stop')
-    @patch('servly.service.ServiceManager.start')
+    @patch('pmo.service.ServiceManager.stop')
+    @patch('pmo.service.ServiceManager.start')
     def test_restart_single_service(self, mock_start, mock_stop, basic_config_file):
         """TC2.5: 测试重启单个服务"""
         mock_stop.return_value = True
@@ -102,14 +102,14 @@ class TestServiceManagement:
         mock_stop.assert_called_once_with('test-sleep')
         mock_start.assert_called_once_with('test-sleep')
     
-    @patch('servly.service.ServiceManager.restart')
+    @patch('pmo.service.ServiceManager.restart')
     def test_restart_all_services(self, mock_restart, basic_config_file):
         """TC2.6: 测试重启所有服务"""
         manager = ServiceManager(config_path=basic_config_file)
         mock_restart.return_value = True
         
         with patch.object(manager, 'get_service_names', return_value=['test-echo', 'test-sleep']):
-            from servly.cli import handle_restart
+            from pmo.cli import handle_restart
             result = handle_restart(manager, 'all')
             assert result is True
             

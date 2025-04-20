@@ -6,12 +6,12 @@
 
 ### 1. 配置文件加载
 
-- **TC1.1**: 验证默认配置文件 `servly.yml` 加载
-  - 步骤: 执行 `servly list` 命令
-  - 期望结果: 正确显示 servly.yml 中定义的所有服务
+- **TC1.1**: 验证默认配置文件 `pmo.yml` 加载
+  - 步骤: 执行 `pmo list` 命令
+  - 期望结果: 正确显示 pmo.yml 中定义的所有服务
 
 - **TC1.2**: 验证自定义配置文件加载 (-f 参数)
-  - 步骤: 创建测试配置文件，执行 `servly -f test-servly.yml list` 命令
+  - 步骤: 创建测试配置文件，执行 `pmo -f test-pmo.yml list` 命令
   - 期望结果: 正确显示测试配置文件中定义的服务
 
 - **TC1.3**: 验证不同格式的配置项解析
@@ -21,45 +21,45 @@
 ### 2. 服务管理功能
 
 - **TC2.1**: 启动单个服务
-  - 步骤: 执行 `servly start service-name` 命令
+  - 步骤: 执行 `pmo start service-name` 命令
   - 期望结果: 指定服务成功启动，状态变为 RUNNING
 
 - **TC2.2**: 启动所有服务
-  - 步骤: 执行 `servly start all` 命令
+  - 步骤: 执行 `pmo start all` 命令
   - 期望结果: 所有服务成功启动，状态均变为 RUNNING
 
 - **TC2.3**: 停止单个服务
-  - 步骤: 执行 `servly stop service-name` 命令
+  - 步骤: 执行 `pmo stop service-name` 命令
   - 期望结果: 指定服务成功停止，状态变为 STOPPED
 
 - **TC2.4**: 停止所有服务
-  - 步骤: 执行 `servly stop all` 命令
+  - 步骤: 执行 `pmo stop all` 命令
   - 期望结果: 所有服务成功停止，状态均变为 STOPPED
 
 - **TC2.5**: 重启单个服务
-  - 步骤: 执行 `servly restart service-name` 命令
+  - 步骤: 执行 `pmo restart service-name` 命令
   - 期望结果: 指定服务先停止后启动，最终状态为 RUNNING
 
 - **TC2.6**: 重启所有服务
-  - 步骤: 执行 `servly restart all` 命令
+  - 步骤: 执行 `pmo restart all` 命令
   - 期望结果: 所有服务先停止后启动，最终状态均为 RUNNING
 
 ### 3. 日志功能
 
 - **TC3.1**: 查看单个服务日志
-  - 步骤: 执行 `servly log service-name` 命令
+  - 步骤: 执行 `pmo log service-name` 命令
   - 期望结果: 显示指定服务的标准输出和错误日志
 
 - **TC3.2**: 查看所有服务日志
-  - 步骤: 执行 `servly log all` 命令
+  - 步骤: 执行 `pmo log all` 命令
   - 期望结果: 显示所有服务的合并日志流，附带服务名称标识
 
 - **TC3.3**: 不跟随日志（--no-follow 参数）
-  - 步骤: 执行 `servly log service-name --no-follow` 命令
+  - 步骤: 执行 `pmo log service-name --no-follow` 命令
   - 期望结果: 只显示最近的日志行数，不持续跟踪
 
 - **TC3.4**: 指定显示行数（--lines 参数）
-  - 步骤: 执行 `servly log service-name --lines 20` 命令
+  - 步骤: 执行 `pmo log service-name --lines 20` 命令
   - 期望结果: 显示最近 20 行日志
 
 ## 高级功能测试
@@ -77,11 +77,11 @@
 ### 5. 错误处理
 
 - **TC5.1**: 处理不存在的服务
-  - 步骤: 执行 `servly start non-existent-service` 命令
+  - 步骤: 执行 `pmo start non-existent-service` 命令
   - 期望结果: 显示适当的错误消息，指出服务不存在
 
 - **TC5.2**: 处理已经运行的服务
-  - 步骤: 启动服务后再次执行 `servly start service-name` 命令
+  - 步骤: 启动服务后再次执行 `pmo start service-name` 命令
   - 期望结果: 显示服务已经运行的信息，不重复启动
 
 - **TC5.3**: 处理配置文件错误
@@ -91,21 +91,21 @@
 ### 6. 保留名称限制
 
 - **TC6.1**: 验证保留名称限制
-  - 步骤: 在配置文件中添加名为 "servly" 的服务
+  - 步骤: 在配置文件中添加名为 "pmo" 的服务
   - 期望结果: 该服务被忽略，日志显示相应警告
 
 ### 7. 目录结构验证
 
-- **TC7.1**: 验证 .servly 目录结构
+- **TC7.1**: 验证 .pmo 目录结构
   - 步骤: 启动服务后检查目录结构
   - 期望结果: 创建了正确的目录结构，包含 logs 和 pids 子目录
 
 - **TC7.2**: 验证 PID 文件创建
-  - 步骤: 启动服务后检查 .servly/pids 目录
+  - 步骤: 启动服务后检查 .pmo/pids 目录
   - 期望结果: 为每个运行中的服务创建了 PID 文件
 
 - **TC7.3**: 验证日志文件创建
-  - 步骤: 启动服务后检查 .servly/logs 目录
+  - 步骤: 启动服务后检查 .pmo/logs 目录
   - 期望结果: 为每个服务创建了标准输出和错误日志文件
 
 ## 兼容性和边缘情况测试
@@ -129,5 +129,5 @@
 ## 帮助文档测试
 
 - **TC10.1**: 验证帮助信息
-  - 步骤: 执行 `servly --help` 命令
+  - 步骤: 执行 `pmo --help` 命令
   - 期望结果: 显示所有可用命令和参数的帮助信息
