@@ -71,6 +71,11 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     log_parser.add_argument('--lines', '-l', type=int, default=10,
                           help='Number of lines to show initially')
     
+    # Flush command
+    flush_parser = subparsers.add_parser('flush', help=f'{Emojis.LOG} Clear service logs')
+    flush_parser.add_argument('service', nargs='?', default='all',
+                          help='Service name or "all" to clear all logs')
+    
     # LS command (replaces original PS command)
     ls_parser = subparsers.add_parser('ls', help='List services')
     
@@ -195,6 +200,33 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     log_manager.tail_logs(services, follow=follow, lines=lines)
     return True
 
+def handle_flush(manager: ServiceManager, log_manager: LogManager, service_name: str) -> bool:
+    """Handle flush command to clear logs"""
+    if service_name == 'all':
+        console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
+        result = log_manager.flush_logs()
+        flushed_count = result.get("all", 0)
+        
+        if flushed_count > 0:
+            print_success(f"Successfully flushed {flushed_count} log files")
+        else:
+            print_warning("No log files found to flush")
+    else:
+        if service_name not in manager.get_service_names():
+            print_error(f"Service '{service_name}' not found in config.")
+            return False
+            
+        console.print(f"{Emojis.LOG} Flushing logs for '{service_name}'...", style="warning")
+        result = log_manager.flush_logs([service_name])
+        flushed_count = result.get(service_name, 0)
+        
+        if flushed_count > 0:
+            print_success(f"Successfully flushed logs for '{service_name}'")
+        else:
+            print_warning(f"No log files found for '{service_name}'")
+    
+    return True
+
 def handle_list(manager: ServiceManager) -> bool:
     """Handle list services command"""
     service_names = manager.get_service_names()
@@ -290,6 +322,8 @@ def main():
             success = handle_log(service_manager, log_manager, args)
         elif args.command == 'ls':
             success = handle_list(service_manager)
+        elif args.command == 'flush':
+            success = handle_flush(service_manager, log_manager, args.service)
         else:
             parser.print_help()
             return 1

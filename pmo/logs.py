@@ -143,6 +143,54 @@ class LogManager:
             'stderr': self.log_dir / f"{service_name}-error.log"
         }
     
+    def flush_logs(self, service_names: List[str] = None) -> Dict[str, int]:
+        """
+        清空日志文件
+        
+        Args:
+            service_names: 要清空日志的服务名称列表，如果为None则清空所有日志文件
+            
+        Returns:
+            Dict[str, int]: 键为服务名称，值为清空的日志文件数量
+        """
+        result = {}
+        
+        # 如果没有指定服务，删除.pmo/logs目录下所有日志文件
+        if not service_names:
+            # 获取所有日志文件
+            log_files = list(self.log_dir.glob('*-out.log')) + list(self.log_dir.glob('*-error.log'))
+            
+            # 删除所有日志文件
+            deleted_count = 0
+            for log_file in log_files:
+                try:
+                    # 直接删除文件
+                    log_file.unlink()
+                    deleted_count += 1
+                except (IOError, PermissionError) as e:
+                    print_error(f"Failed to delete log file {log_file}: {str(e)}")
+            
+            result["all"] = deleted_count
+            return result
+                
+        # 对每个指定的服务删除其日志
+        for service_name in service_names:
+            log_files = self.get_log_files(service_name)
+            deleted = 0
+            
+            for log_type, log_path in log_files.items():
+                if log_path.exists():
+                    try:
+                        # 直接删除文件
+                        log_path.unlink()
+                        deleted += 1
+                    except (IOError, PermissionError) as e:
+                        print_error(f"Failed to delete {log_type} log for '{service_name}': {str(e)}")
+            
+            result[service_name] = deleted
+            
+        return result
+    
     def _parse_log_line(self, line: str) -> Tuple[str, str]:
         """Parse log line, extract timestamp and content"""
         timestamp = ""
