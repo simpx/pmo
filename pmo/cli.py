@@ -47,25 +47,25 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     # Start command
     start_parser = subparsers.add_parser('start', help=f'{Emojis.START} Start services')
-    start_parser.add_argument('service', nargs='?', 
-                            help='Service name or "all" to start all services')
+    start_parser.add_argument('service', nargs='*', 
+                            help='Service names or IDs (multiple allowed) or "all" to start all services')
     start_parser.add_argument('--dry-run', action='store_true',
                             help='Show commands to execute without running them')
     
     # Stop command
     stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} Stop services')
-    stop_parser.add_argument('service', nargs='?',
-                           help='Service name or "all" to stop all services')
+    stop_parser.add_argument('service', nargs='*',
+                           help='Service names or IDs (multiple allowed) or "all" to stop all services')
     
     # Restart command
     restart_parser = subparsers.add_parser('restart', help=f'{Emojis.RESTART} Restart services')
-    restart_parser.add_argument('service', nargs='?',
-                              help='Service name or "all" to restart all services')
+    restart_parser.add_argument('service', nargs='*',
+                              help='Service names or IDs (multiple allowed) or "all" to restart all services')
     
     # Log command
     log_parser = subparsers.add_parser('log', help=f'{Emojis.LOG} View service logs')
-    log_parser.add_argument('service', nargs='?', default='all',
-                          help='Service name or "all" to view all logs')
+    log_parser.add_argument('service', nargs='*', default=['all'],
+                          help='Service names or IDs (multiple allowed) or "all" to view all logs')
     log_parser.add_argument('--no-follow', '-n', action='store_true',
                           help='Do not follow logs in real-time')
     log_parser.add_argument('--lines', '-l', type=int, default=10,
@@ -73,8 +73,8 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     # Flush command
     flush_parser = subparsers.add_parser('flush', help=f'{Emojis.LOG} Clear service logs')
-    flush_parser.add_argument('service', nargs='?', default='all',
-                          help='Service name or "all" to clear all logs')
+    flush_parser.add_argument('service', nargs='*', default=['all'],
+                          help='Service names or IDs (multiple allowed) or "all" to clear all logs')
     
     # LS command (replaces original PS command)
     ls_parser = subparsers.add_parser('ls', help='List services')
@@ -89,162 +89,172 @@ def show_service_prompt(manager: ServiceManager, command: str) -> None:
     if service_names:
         print_info(f"Available services: {', '.join(service_names)}")
 
-def handle_start(manager: ServiceManager, service_spec: str, dry_run: bool = False) -> bool:
-    """Handle start command"""
-    # Check if service_spec is None (user ran just 'pmo start')
-    if service_spec is None:
+def handle_start(manager: ServiceManager, service_specs: List[str], dry_run: bool = False) -> bool:
+    """Handle start command with support for multiple services"""
+    # Check if no services specified
+    if not service_specs:
         show_service_prompt(manager, "start")
         return False
-        
-    if service_spec == 'all':
-        service_names = manager.get_service_names()
-        if not service_names:
-            print_warning("No services defined in config.")
-            return False
-        
+    
+    # Resolve service names, handling possible IDs or 'all'
+    service_names = resolve_multiple_services(manager, service_specs)
+    
+    if not service_names:
+        print_warning("No valid services specified for starting.")
+        return False
+    
+    # If coming from 'all', provide appropriate message
+    if 'all' in service_specs:
         if dry_run:
             console.print(f"{Emojis.INFO} Commands to execute (dry run):", style="running")
         else:
             console.print(f"{Emojis.START} Starting all services...", style="running")
-            
-        success = True
-        for name in service_names:
-            if not manager.start(name, dry_run=dry_run):
-                print_error(f"Failed to start '{name}'")
-                success = False
-            else:
-                if not dry_run:
-                    print_success(f"Service '{name}' started")
-        
+    elif len(service_names) > 1:
+        if dry_run:
+            console.print(f"{Emojis.INFO} Commands to execute for selected services (dry run):", style="running")
+        else:
+            console.print(f"{Emojis.START} Starting selected services...", style="running")
+    
+    # Start each service
+    success = True
+    for name in service_names:
+        if not manager.start(name, dry_run=dry_run):
+            print_error(f"Failed to start '{name}'")
+            success = False
+        else:
+            if not dry_run:
+                print_success(f"Service '{name}' started")
+    
+    # Final status message
+    if len(service_names) > 1:
         if success and not dry_run:
-            print_success("All services started successfully!")
-        elif not success:
+            print_success("All specified services started successfully!")
+        elif not success and not dry_run:
             print_warning("Some services failed to start, check logs for details.")
-        
-        return success
-    else:
-        # 解析服务ID或名称
-        service_name = resolve_service_id(manager, service_spec)
-        if service_name is None:
-            return False
-            
-        result = manager.start(service_name, dry_run=dry_run)
-        if result and not dry_run:
-            print_success(f"Service '{service_name}' started")
-        elif not result:
-            print_error(f"Failed to start '{service_name}'")
-        return result
+    
+    return success
 
-def handle_stop(manager: ServiceManager, service_spec: str) -> bool:
-    """Handle stop command"""
-    # Check if service_spec is None (user ran just 'pmo stop')
-    if service_spec is None:
+def handle_stop(manager: ServiceManager, service_specs: List[str]) -> bool:
+    """Handle stop command with support for multiple services"""
+    # Check if no services specified
+    if not service_specs:
         show_service_prompt(manager, "stop")
         return False
-        
-    if service_spec == 'all':
+    
+    # Resolve service names, handling possible IDs or 'all'
+    if 'all' in service_specs:
         service_names = manager.get_running_services()
         if not service_names:
             console.print(f"{Emojis.INFO} No services are running.", style="dim")
             return True
-        
         console.print(f"{Emojis.STOP} Stopping all services...", style="warning")
-        success = True
-        for name in service_names:
-            if not manager.stop(name):
-                print_error(f"Failed to stop '{name}'")
-                success = False
-            else:
-                console.print(f"{Emojis.STOPPED} Service '{name}' stopped", style="stopped")
+    else:
+        # Resolve specific services
+        service_names = []
+        for spec in service_specs:
+            service_name = resolve_service_id(manager, spec)
+            if service_name and service_name not in service_names:
+                # Check if service is running before stopping
+                if manager.is_running(service_name):
+                    service_names.append(service_name)
+                else:
+                    console.print(f"{Emojis.INFO} Service '{service_name}' is not running.", style="dim")
         
+        if not service_names:
+            print_warning("No running services specified for stopping.")
+            return True
+            
+        if len(service_names) > 1:
+            console.print(f"{Emojis.STOP} Stopping selected services...", style="warning")
+    
+    # Stop each service
+    success = True
+    for name in service_names:
+        if not manager.stop(name):
+            print_error(f"Failed to stop '{name}'")
+            success = False
+        else:
+            console.print(f"{Emojis.STOPPED} Service '{name}' stopped", style="stopped")
+    
+    # Final status message
+    if len(service_names) > 1:
         if success:
-            console.print(f"\n{Emojis.STOPPED} All services stopped successfully!", style="warning")
+            console.print(f"\n{Emojis.STOPPED} All specified services stopped successfully!", style="warning")
         else:
             print_warning("Some services failed to stop, check logs for details.")
-        
-        return success
-    else:
-        # 解析服务ID或名称
-        service_name = resolve_service_id(manager, service_spec)
-        if service_name is None:
-            return False
-            
-        result = manager.stop(service_name)
-        if result:
-            console.print(f"{Emojis.STOPPED} Service '{service_name}' stopped", style="warning")
-        else:
-            print_error(f"Failed to stop '{service_name}'")
-        return result
+    
+    return success
 
-def handle_restart(manager: ServiceManager, service_spec: str) -> bool:
-    """Handle restart command"""
-    # Check if service_spec is None (user ran just 'pmo restart')
-    if service_spec is None:
+def handle_restart(manager: ServiceManager, service_specs: List[str]) -> bool:
+    """Handle restart command with support for multiple services"""
+    # Check if no services specified
+    if not service_specs:
         show_service_prompt(manager, "restart")
         return False
-        
-    if service_spec == 'all':
-        service_names = manager.get_service_names()
-        if not service_names:
-            print_warning("No services defined in config.")
-            return False
-        
+    
+    # Resolve service names, handling possible IDs or 'all'
+    service_names = resolve_multiple_services(manager, service_specs)
+    
+    if not service_names:
+        print_warning("No valid services specified for restarting.")
+        return False
+    
+    # If coming from 'all', provide appropriate message
+    if 'all' in service_specs:
         console.print(f"{Emojis.RESTART} Restarting all services...", style="restart")
-        success = True
-        for name in service_names:
-            if not manager.restart(name):
-                print_error(f"Failed to restart '{name}'")
-                success = False
-            else:
-                console.print(f"{Emojis.RUNNING} Service '{name}' restarted", style="restart")
-        
+    elif len(service_names) > 1:
+        console.print(f"{Emojis.RESTART} Restarting selected services...", style="restart")
+    
+    # Restart each service
+    success = True
+    for name in service_names:
+        if not manager.restart(name):
+            print_error(f"Failed to restart '{name}'")
+            success = False
+        else:
+            console.print(f"{Emojis.RUNNING} Service '{name}' restarted", style="restart")
+    
+    # Final status message
+    if len(service_names) > 1:
         if success:
-            print_success("All services restarted successfully!")
+            print_success("All specified services restarted successfully!")
         else:
             print_warning("Some services failed to restart, check logs for details.")
-        
-        return success
-    else:
-        # 解析服务ID或名称
-        service_name = resolve_service_id(manager, service_spec)
-        if service_name is None:
-            return False
-            
-        result = manager.restart(service_name)
-        if result:
-            console.print(f"{Emojis.RUNNING} Service '{service_name}' restarted", style="restart")
-        else:
-            print_error(f"Failed to restart '{service_name}'")
-        return result
+    
+    return success
 
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
-    """Handle log command"""
-    service_spec = args.service
+    """Handle log command with support for multiple services"""
+    service_specs = args.service
     follow = not args.no_follow
     lines = args.lines
     
-    if service_spec == 'all':
-        services = manager.get_service_names()
-        if not services:
-            print_warning("No services defined in config.")
-            return False
-    else:
-        # 解析服务ID或名称
-        service_name = resolve_service_id(manager, service_spec)
-        if service_name is None:
-            return False
-        services = [service_name]
+    # Check if no services specified (should not happen due to default=['all'])
+    if not service_specs:
+        service_specs = ['all']
     
+    # Resolve service names, handling possible IDs or 'all'
+    service_names = resolve_multiple_services(manager, service_specs)
+    
+    if not service_names:
+        print_warning("No valid services specified for viewing logs.")
+        return False
+        
     # Use LogManager to view logs
-    log_manager.tail_logs(services, follow=follow, lines=lines)
+    log_manager.tail_logs(service_names, follow=follow, lines=lines)
     return True
 
-def handle_flush(manager: ServiceManager, log_manager: LogManager, service_spec: str) -> bool:
-    """Handle flush command to clear logs"""
-    # 获取正在运行的服务列表
+def handle_flush(manager: ServiceManager, log_manager: LogManager, service_specs: List[str]) -> bool:
+    """Handle flush command to clear logs with support for multiple services"""
+    # Check if no services specified (should not happen due to default=['all'])
+    if not service_specs:
+        service_specs = ['all']
+
+    # Get running services list for proper log handling
     running_services = manager.get_running_services()
     
-    if service_spec == 'all':
+    # If 'all' is specified, flush all logs
+    if 'all' in service_specs:
         console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
         result = log_manager.flush_logs(running_services=running_services)
         deleted_count = result.get("deleted", 0)
@@ -258,27 +268,39 @@ def handle_flush(manager: ServiceManager, log_manager: LogManager, service_spec:
         else:
             print_warning("No log files found to flush")
     else:
-        # 解析服务ID或名称
-        service_name = resolve_service_id(manager, service_spec)
-        if service_name is None:
+        # Resolve service names for specific services
+        service_names = resolve_multiple_services(manager, service_specs)
+        
+        if not service_names:
+            print_warning("No valid services specified for flushing logs.")
             return False
-        
-        console.print(f"{Emojis.LOG} Flushing logs for '{service_name}'...", style="warning")
-        result = log_manager.flush_logs([service_name], running_services=running_services)
-        
-        if service_name in result:
-            service_result = result[service_name]
-            deleted_count = service_result.get("deleted", 0)
-            cleared_count = service_result.get("cleared", 0)
             
-            if deleted_count > 0:
-                print_success(f"Successfully deleted {deleted_count} log files for '{service_name}'")
-            if cleared_count > 0:
-                print_success(f"Successfully cleared content of {cleared_count} log files for '{service_name}'")
-            if deleted_count == 0 and cleared_count == 0:
+        if len(service_names) > 1:
+            console.print(f"{Emojis.LOG} Flushing logs for selected services...", style="warning")
+        
+        # Flush logs for each specified service
+        result = log_manager.flush_logs(service_names, running_services=running_services)
+        
+        success_count = 0
+        for service_name in service_names:
+            if service_name in result:
+                service_result = result[service_name]
+                deleted_count = service_result.get("deleted", 0)
+                cleared_count = service_result.get("cleared", 0)
+                
+                if deleted_count > 0:
+                    print_success(f"Successfully deleted {deleted_count} log files for '{service_name}'")
+                    success_count += 1
+                if cleared_count > 0:
+                    print_success(f"Successfully cleared content of {cleared_count} log files for '{service_name}'")
+                    success_count += 1
+                if deleted_count == 0 and cleared_count == 0:
+                    print_warning(f"No log files found for '{service_name}'")
+            else:
                 print_warning(f"No log files found for '{service_name}'")
-        else:
-            print_warning(f"No log files found for '{service_name}'")
+        
+        if success_count > 0 and len(service_names) > 1:
+            print_success(f"Successfully flushed logs for {success_count} service(s)")
     
     return True
 
@@ -375,6 +397,33 @@ def resolve_service_id(manager: ServiceManager, service_id: str) -> Optional[str
         else:
             print_error(f"Service not found: '{service_id}'")
             return None
+
+def resolve_multiple_services(manager: ServiceManager, service_specs: List[str]) -> List[str]:
+    """
+    Convert a list of service IDs or names to actual service names.
+    If 'all' is included in the list, returns all service names.
+    
+    Args:
+        manager: ServiceManager instance
+        service_specs: List of service IDs or names to resolve
+        
+    Returns:
+        List of resolved service names
+    """
+    if not service_specs:
+        return []
+        
+    # If 'all' is specified, return all service names
+    if 'all' in service_specs:
+        return manager.get_service_names()
+        
+    resolved_services = []
+    for service_spec in service_specs:
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name and service_name not in resolved_services:
+            resolved_services.append(service_name)
+    
+    return resolved_services
 
 def main():
     """CLI application entry point"""
