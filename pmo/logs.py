@@ -93,7 +93,7 @@ def print_service_table(services: List[Dict]):
     table.add_column("gpu id", justify="center", width=6)
     table.add_column("user", width=10)
     
-    for index, service in enumerate(services):
+    for service in services:
         name = service["name"]
         pid = service["pid"] or "0"
         uptime = service.get("uptime", "0")
@@ -102,6 +102,9 @@ def print_service_table(services: List[Dict]):
         gpu_memory = service.get("gpu_memory", "-")
         gpu_id = service.get("gpu_id", "-")
         status = service["status"]
+        
+        # 使用服务对象中的 id 字段，而不是使用索引
+        service_id = service.get("id", "0")
         
         # Get username if possible
         import os
@@ -113,7 +116,7 @@ def print_service_table(services: List[Dict]):
         status_style = "running" if status == "running" else "stopped"
         
         table.add_row(
-            Text(str(index), style=status_style),
+            Text(service_id, style=status_style),
             Text(name, style=status_style),
             Text(str(pid), style=status_style),
             Text(str(uptime), style=status_style),

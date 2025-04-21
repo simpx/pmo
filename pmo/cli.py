@@ -89,14 +89,14 @@ def show_service_prompt(manager: ServiceManager, command: str) -> None:
     if service_names:
         print_info(f"Available services: {', '.join(service_names)}")
 
-def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = False) -> bool:
+def handle_start(manager: ServiceManager, service_spec: str, dry_run: bool = False) -> bool:
     """Handle start command"""
-    # Check if service_name is None (user ran just 'pmo start')
-    if service_name is None:
+    # Check if service_spec is None (user ran just 'pmo start')
+    if service_spec is None:
         show_service_prompt(manager, "start")
         return False
         
-    if service_name == 'all':
+    if service_spec == 'all':
         service_names = manager.get_service_names()
         if not service_names:
             print_warning("No services defined in config.")
@@ -123,6 +123,11 @@ def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = Fal
         
         return success
     else:
+        # 解析服务ID或名称
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name is None:
+            return False
+            
         result = manager.start(service_name, dry_run=dry_run)
         if result and not dry_run:
             print_success(f"Service '{service_name}' started")
@@ -130,14 +135,14 @@ def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = Fal
             print_error(f"Failed to start '{service_name}'")
         return result
 
-def handle_stop(manager: ServiceManager, service_name: str) -> bool:
+def handle_stop(manager: ServiceManager, service_spec: str) -> bool:
     """Handle stop command"""
-    # Check if service_name is None (user ran just 'pmo stop')
-    if service_name is None:
+    # Check if service_spec is None (user ran just 'pmo stop')
+    if service_spec is None:
         show_service_prompt(manager, "stop")
         return False
         
-    if service_name == 'all':
+    if service_spec == 'all':
         service_names = manager.get_running_services()
         if not service_names:
             console.print(f"{Emojis.INFO} No services are running.", style="dim")
@@ -159,6 +164,11 @@ def handle_stop(manager: ServiceManager, service_name: str) -> bool:
         
         return success
     else:
+        # 解析服务ID或名称
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name is None:
+            return False
+            
         result = manager.stop(service_name)
         if result:
             console.print(f"{Emojis.STOPPED} Service '{service_name}' stopped", style="warning")
@@ -166,14 +176,14 @@ def handle_stop(manager: ServiceManager, service_name: str) -> bool:
             print_error(f"Failed to stop '{service_name}'")
         return result
 
-def handle_restart(manager: ServiceManager, service_name: str) -> bool:
+def handle_restart(manager: ServiceManager, service_spec: str) -> bool:
     """Handle restart command"""
-    # Check if service_name is None (user ran just 'pmo restart')
-    if service_name is None:
+    # Check if service_spec is None (user ran just 'pmo restart')
+    if service_spec is None:
         show_service_prompt(manager, "restart")
         return False
         
-    if service_name == 'all':
+    if service_spec == 'all':
         service_names = manager.get_service_names()
         if not service_names:
             print_warning("No services defined in config.")
@@ -195,6 +205,11 @@ def handle_restart(manager: ServiceManager, service_name: str) -> bool:
         
         return success
     else:
+        # 解析服务ID或名称
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name is None:
+            return False
+            
         result = manager.restart(service_name)
         if result:
             console.print(f"{Emojis.RUNNING} Service '{service_name}' restarted", style="restart")
@@ -204,18 +219,19 @@ def handle_restart(manager: ServiceManager, service_name: str) -> bool:
 
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     """Handle log command"""
-    service_name = args.service
+    service_spec = args.service
     follow = not args.no_follow
     lines = args.lines
     
-    if service_name == 'all':
+    if service_spec == 'all':
         services = manager.get_service_names()
         if not services:
             print_warning("No services defined in config.")
             return False
     else:
-        if service_name not in manager.get_service_names():
-            print_error(f"Service '{service_name}' not found in config.")
+        # 解析服务ID或名称
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name is None:
             return False
         services = [service_name]
     
@@ -223,12 +239,12 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     log_manager.tail_logs(services, follow=follow, lines=lines)
     return True
 
-def handle_flush(manager: ServiceManager, log_manager: LogManager, service_name: str) -> bool:
+def handle_flush(manager: ServiceManager, log_manager: LogManager, service_spec: str) -> bool:
     """Handle flush command to clear logs"""
     # 获取正在运行的服务列表
     running_services = manager.get_running_services()
     
-    if service_name == 'all':
+    if service_spec == 'all':
         console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
         result = log_manager.flush_logs(running_services=running_services)
         deleted_count = result.get("deleted", 0)
@@ -242,8 +258,9 @@ def handle_flush(manager: ServiceManager, log_manager: LogManager, service_name:
         else:
             print_warning("No log files found to flush")
     else:
-        if service_name not in manager.get_service_names():
-            print_error(f"Service '{service_name}' not found in config.")
+        # 解析服务ID或名称
+        service_name = resolve_service_id(manager, service_spec)
+        if service_name is None:
             return False
         
         console.print(f"{Emojis.LOG} Flushing logs for '{service_name}'...", style="warning")
@@ -275,7 +292,7 @@ def handle_list(manager: ServiceManager) -> bool:
     
     # Build service list data
     services = []
-    for name in service_names:
+    for i, name in enumerate(service_names):
         is_running = manager.is_running(name)
         pid = manager.get_service_pid(name)
         
@@ -306,6 +323,7 @@ def handle_list(manager: ServiceManager) -> bool:
         restarts_count = manager.get_restarts_count(name)
         
         services.append({
+            "id": str(i + 1),  # 添加数字ID，从1开始
             "name": name,
             "status": "running" if is_running else "stopped",
             "pid": pid,
@@ -326,6 +344,37 @@ def handle_list(manager: ServiceManager) -> bool:
     console.print()
     
     return True
+
+def resolve_service_id(manager: ServiceManager, service_id: str) -> Optional[str]:
+    """
+    将服务ID或名称解析为实际的服务名称
+    支持两种格式:
+    1. 数字ID (如 "1", "2", "3")
+    2. 服务名称
+    
+    如果输入是数字，则将其视为服务列表中的索引
+    如果找不到匹配的服务，返回None
+    """
+    if service_id == "all":
+        return "all"
+        
+    # 尝试将输入解析为数字ID
+    try:
+        id_num = int(service_id)
+        service_names = manager.get_service_names()
+        # 如果ID是有效的索引，返回对应的服务名称
+        if 1 <= id_num <= len(service_names):
+            return service_names[id_num - 1]  # 用户看到的ID从1开始，但索引从0开始
+        else:
+            print_error(f"Invalid service ID: {service_id}")
+            return None
+    except ValueError:
+        # 不是数字，将其视为服务名称
+        if service_id in manager.get_service_names():
+            return service_id
+        else:
+            print_error(f"Service not found: '{service_id}'")
+            return None
 
 def main():
     """CLI application entry point"""
@@ -375,5 +424,5 @@ def main():
         
     return 0 if success else 1
 
-if __name__ == "__main__":
+if __name__ == "python":
     sys.exit(main())
