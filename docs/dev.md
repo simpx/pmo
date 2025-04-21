@@ -1,17 +1,18 @@
-# PMO Development Guide
+# PMO Technical Development Guide
 
-PMO is a process management tool similar to PM2, designed to simplify application deployment and management.
+PMO (Process Manager Omni) is a lightweight process management tool inspired by PM2, designed for efficient application deployment and monitoring in development environments.
 
-## Overview
+## Architecture Overview
 
-PMO manages processes based on:
-- Configuration in `pmo.yml` file in the current directory
-- Environment variables from `.env` file
-- Runtime information stored in `.pmo` directory
+PMO operates with the following core components:
 
-## Directory Structure
+- **ServiceManager**: Handles process lifecycle management (start, stop, restart)
+- **LogManager**: Manages service logs with real-time monitoring capabilities
+- **CLI**: Provides a user-friendly command-line interface
 
-The `.pmo` directory stores all runtime information:
+### Directory Structure
+
+The PMO runtime uses a `.pmo` directory that maintains the following structure:
 
 ```
 .pmo/
@@ -19,86 +20,114 @@ The `.pmo` directory stores all runtime information:
 │   ├── [service-name]-out.log    # Standard output logs
 │   └── [service-name]-error.log  # Error logs
 ├── pids/
-│   └── [service-name].pid        # Process ID files
+│   ├── [service-name].pid        # Process ID files
+│   ├── [service-name].time       # Service start time records
+│   └── [service-name].restarts   # Restart count tracking
 ```
 
-## Core Commands
+## Core Components
 
-### Starting Services
+### 1. ServiceManager
 
-```bash
-pmo start [all | service-name]
-```
+The ServiceManager (`pmo/service.py`) is responsible for:
 
-Starts all services defined in `pmo.yml` or a specific service by name.
+- Parsing the `pmo.yml` configuration file
+- Managing process lifecycle (start, stop, restart)
+- Tracking service status and resource usage
+- Monitoring CPU, memory, and GPU usage for running processes
+- Maintaining process metadata (PIDs, uptime, restart counts)
 
-### Stopping Services
+#### Process Control Implementation
 
-```bash
-pmo stop [all | service-name]
-```
+Services are started as detached processes with:
+- Output redirected to log files
+- Process group isolation for clean termination
+- Environment variable inheritance and customization
+- Working directory control
 
-Stops all running services or a specific service by name.
+The stop sequence uses a graceful shutdown approach:
+1. Send SIGTERM for graceful termination
+2. Wait for process to terminate (configurable timeout)
+3. Send SIGKILL if process doesn't respond to SIGTERM
+4. Clean up PID and metadata files
 
-### Viewing Logs
+### 2. LogManager
 
-```bash
-pmo log [all | service-name]
-```
+The LogManager (`pmo/logs.py`) handles:
 
-Displays logs in real-time (similar to `tail -f`):
-- For a specific service: shows only that service's logs
-- For `all`: combines multiple log streams into a single view (similar to PM2)
+- Real-time log monitoring with formatting
+- Log file management and cleanup
+- Combining multiple log streams for parallel viewing
+- Extracting and displaying timestamps
 
-### Restarting Services
+### 3. CLI Interface
 
-```bash
-pmo restart [all | service-name]
-```
+The CLI (`pmo/cli.py`) provides:
 
-Restarts all services or a specific service by name.
+- Command parsing with extensive options
+- Rich terminal output with status indicators
+- Service table display with resource usage statistics
+- Interactive log viewing
 
-## Configuration
+## Configuration Format
 
-### pmo.yml
+PMO supports two configuration styles in the `pmo.yml` file:
 
-PMO supports both simple command format and detailed configuration:
+### Simple Format
 
 ```yaml
-# Basic usage - directly specify command
-app1: python app.py
-
-# Detailed configuration
-app2:
-  script: "python app.py"
-  cwd: "./service1"
-  env:
-    NODE_ENV: production
+# Direct command specification
+service-name: command to execute
 ```
 
-The basic format `app-name: command` allows for quick and simple service definition without additional configuration.
-
-**Note:** The name "pmo" is reserved and cannot be used as an application name, to avoid conflicts with internal configuration directives.
-
-Examples:
+### Detailed Format
 
 ```yaml
-# Valid configurations
-web-server: node server.js
-api: python api.py
-
-# Invalid - using reserved name
-pmo: node app.js  # This will not work as expected
+service-name:
+  cmd: "command to execute"
+  cwd: "./working/directory"  # Optional
+  env:                        # Optional
+    ENV_VAR1: value1
+    ENV_VAR2: value2
 ```
 
-### Environment Variables
+## Resource Monitoring
 
-Environment variables in `.env` file are automatically loaded and available to all managed processes.
+PMO monitors:
 
-## Development Workflow
+- **CPU Usage**: Per-process CPU percentage
+- **Memory Usage**: Physical memory consumption (RSS) in human-readable format
+- **GPU Resources**: For NVIDIA GPUs, tracks memory usage and device allocation
+  - Automatic detection via pynvml (if available) or nvidia-smi
 
-1. Define services in `pmo.yml`
-2. Set environment variables in `.env` if needed
-3. Use `pmo start` to launch services
-4. Monitor with `pmo log`
-5. Restart or stop as needed
+## Implementation Notes
+
+### Process Isolation
+
+Each managed process runs in its own process group, allowing PMO to properly terminate not just the main process but all of its children when stopping a service.
+
+### Graceful Shutdown
+
+The stop sequence follows best practices by:
+1. Attempting graceful termination with SIGTERM
+2. Waiting for a configurable timeout period
+3. Force termination with SIGKILL if necessary
+
+### GPU Detection
+
+GPU resource monitoring works through multiple methods:
+- Primary: pynvml library (if available)
+- Fallback: nvidia-smi command-line interface
+
+### Log File Handling
+
+When a service is running, log files are preserved but can be cleared.
+For stopped services, log files can be either preserved or deleted based on configuration.
+
+## Technical References
+
+- Python subprocess: Used for process creation and management
+- psutil: For process monitoring and resource usage statistics
+- Rich: Terminal UI rendering and formatting
+- PyYAML: Configuration file parsing
+- pynvml: NVIDIA GPU monitoring (optional dependency)
