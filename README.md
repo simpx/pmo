@@ -61,11 +61,13 @@ Output:
 
 ### Commands
 
-- **Start**: `pmo start [all | service-name]`
-- **Stop**: `pmo stop [all | service-name]`
-- **Restart**: `pmo restart [all | service-name]`
-- **Logs**: `pmo log [all | service-name]`
-- **List**: `pmo ls`
+```
+pmo start   [all | service-name | service-id]
+pmo stop    [all | service-name | service-id]
+pmo restart [all | service-name | service-id]
+pmo log     [all | service-name | service-id]
+pmo ls
+```
 
 ## Configuration
 
