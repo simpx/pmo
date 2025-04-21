@@ -189,15 +189,17 @@ time.sleep(1)
         assert pid is not None
         
         # 使用 CLI 函数列出服务
-        with patch('builtins.print') as mock_print:
+        with patch('pmo.cli.print_service_table') as mock_print:
             handle_list(manager)
             # 验证列表中有服务并且状态为运行中
             mock_print.assert_called()
-            any_running = False
-            for call in mock_print.call_args_list:
-                if 'test-service' in str(call) and 'RUNNING' in str(call):
-                    any_running = True
-            assert any_running, "服务应该在列表中并且状态为运行中"
+            # 由于修改了mock对象，我们需要调整断言方式
+            mock_print.assert_called_once()
+            # 检查传递给print_service_table的参数中是否包含我们的服务
+            args, _ = mock_print.call_args
+            services_list = args[0]
+            test_service_exists = any(s['name'] == 'test-service' and s['status'] == 'running' for s in services_list)
+            assert test_service_exists, "服务应该在列表中并且状态为运行中"
         
         # 使用 CLI 函数停止服务
         result = handle_stop(manager, 'test-service')
@@ -228,16 +230,20 @@ time.sleep(1)
         args = Args()
         
         # 使用 CLI 函数查看日志
-        with patch('builtins.print') as mock_print:
+        with patch('pmo.logs.console.print') as mock_print:
             handle_log(manager, log_manager, args)
             
             # 验证日志内容已打印
             mock_print.assert_called()
-            log_dir_printed = False
+            
+            # 检查是否打印了与test-service相关的日志内容
+            service_log_printed = False
             for call in mock_print.call_args_list:
-                if 'test-service' in str(call):
-                    log_dir_printed = True
-            assert log_dir_printed, "应该打印服务的日志信息"
+                args = call[0]
+                if args and 'test-service' in str(args):
+                    service_log_printed = True
+                    break
+            assert service_log_printed, "应该打印服务的日志信息"
         
         # 停止服务
         manager.stop('test-service')
