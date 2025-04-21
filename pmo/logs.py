@@ -143,51 +143,76 @@ class LogManager:
             'stderr': self.log_dir / f"{service_name}-error.log"
         }
     
-    def flush_logs(self, service_names: List[str] = None) -> Dict[str, int]:
+    def flush_logs(self, service_names: List[str] = None, running_services: List[str] = None) -> Dict[str, int]:
         """
         清空日志文件
         
         Args:
             service_names: 要清空日志的服务名称列表，如果为None则清空所有日志文件
+            running_services: 当前正在运行的服务列表，这些服务的日志文件内容会被清空但不删除文件
             
         Returns:
-            Dict[str, int]: 键为服务名称，值为清空的日志文件数量
+            Dict[str, int]: 键为服务名称，值为操作的日志文件数量
         """
         result = {}
+        running_services = running_services or []
         
-        # 如果没有指定服务，删除.pmo/logs目录下所有日志文件
+        # 如果没有指定服务，处理.pmo/logs目录下所有日志文件
         if not service_names:
             # 获取所有日志文件
             log_files = list(self.log_dir.glob('*-out.log')) + list(self.log_dir.glob('*-error.log'))
             
-            # 删除所有日志文件
             deleted_count = 0
-            for log_file in log_files:
-                try:
-                    # 直接删除文件
-                    log_file.unlink()
-                    deleted_count += 1
-                except (IOError, PermissionError) as e:
-                    print_error(f"Failed to delete log file {log_file}: {str(e)}")
+            cleared_count = 0
             
-            result["all"] = deleted_count
+            for log_file in log_files:
+                # 从文件名中提取服务名称
+                file_name = log_file.name
+                service_name = file_name.replace('-out.log', '').replace('-error.log', '')
+                
+                try:
+                    # 如果服务正在运行，清空文件内容但不删除文件
+                    if service_name in running_services:
+                        # 清空文件内容
+                        with open(log_file, 'w') as f:
+                            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                            f.write(f"--- Log flushed at {timestamp} ---\n")
+                        cleared_count += 1
+                    else:
+                        # 服务未运行，直接删除文件
+                        log_file.unlink()
+                        deleted_count += 1
+                except (IOError, PermissionError) as e:
+                    print_error(f"Failed to process log file {log_file}: {str(e)}")
+            
+            result["deleted"] = deleted_count
+            result["cleared"] = cleared_count
             return result
                 
-        # 对每个指定的服务删除其日志
+        # 对每个指定的服务处理其日志
         for service_name in service_names:
             log_files = self.get_log_files(service_name)
             deleted = 0
+            cleared = 0
             
             for log_type, log_path in log_files.items():
                 if log_path.exists():
                     try:
-                        # 直接删除文件
-                        log_path.unlink()
-                        deleted += 1
+                        # 如果服务正在运行，清空文件内容但不删除文件
+                        if service_name in running_services:
+                            # 清空文件内容
+                            with open(log_path, 'w') as f:
+                                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                                f.write(f"--- Log flushed at {timestamp} ---\n")
+                            cleared += 1
+                        else:
+                            # 服务未运行，直接删除文件
+                            log_path.unlink()
+                            deleted += 1
                     except (IOError, PermissionError) as e:
-                        print_error(f"Failed to delete {log_type} log for '{service_name}': {str(e)}")
+                        print_error(f"Failed to process {log_type} log for '{service_name}': {str(e)}")
             
-            result[service_name] = deleted
+            result[service_name] = {"deleted": deleted, "cleared": cleared}
             
         return result
     

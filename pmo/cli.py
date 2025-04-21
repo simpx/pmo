@@ -202,26 +202,41 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
 
 def handle_flush(manager: ServiceManager, log_manager: LogManager, service_name: str) -> bool:
     """Handle flush command to clear logs"""
+    # 获取正在运行的服务列表
+    running_services = manager.get_running_services()
+    
     if service_name == 'all':
         console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
-        result = log_manager.flush_logs()
-        flushed_count = result.get("all", 0)
+        result = log_manager.flush_logs(running_services=running_services)
+        deleted_count = result.get("deleted", 0)
+        cleared_count = result.get("cleared", 0)
         
-        if flushed_count > 0:
-            print_success(f"Successfully flushed {flushed_count} log files")
+        if deleted_count > 0 or cleared_count > 0:
+            if deleted_count > 0:
+                print_success(f"Successfully deleted {deleted_count} log files for non-running services")
+            if cleared_count > 0:
+                print_success(f"Successfully cleared content of {cleared_count} log files for running services")
         else:
             print_warning("No log files found to flush")
     else:
         if service_name not in manager.get_service_names():
             print_error(f"Service '{service_name}' not found in config.")
             return False
-            
-        console.print(f"{Emojis.LOG} Flushing logs for '{service_name}'...", style="warning")
-        result = log_manager.flush_logs([service_name])
-        flushed_count = result.get(service_name, 0)
         
-        if flushed_count > 0:
-            print_success(f"Successfully flushed logs for '{service_name}'")
+        console.print(f"{Emojis.LOG} Flushing logs for '{service_name}'...", style="warning")
+        result = log_manager.flush_logs([service_name], running_services=running_services)
+        
+        if service_name in result:
+            service_result = result[service_name]
+            deleted_count = service_result.get("deleted", 0)
+            cleared_count = service_result.get("cleared", 0)
+            
+            if deleted_count > 0:
+                print_success(f"Successfully deleted {deleted_count} log files for '{service_name}'")
+            if cleared_count > 0:
+                print_success(f"Successfully cleared content of {cleared_count} log files for '{service_name}'")
+            if deleted_count == 0 and cleared_count == 0:
+                print_warning(f"No log files found for '{service_name}'")
         else:
             print_warning(f"No log files found for '{service_name}'")
     
