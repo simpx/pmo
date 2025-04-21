@@ -13,6 +13,7 @@ from datetime import datetime
 import re
 import shutil
 from typing import Dict, Union, List, Optional, Any, Tuple
+from dotenv import dotenv_values
 
 from pmo.logs import console
 
@@ -25,6 +26,7 @@ class ServiceManager:
         self.config_path = config_path
         # 修改为使用配置文件所在目录
         config_dir = os.path.dirname(os.path.abspath(config_path))
+        self.config_dir = config_dir
         self.pmo_dir = Path(config_dir) / pmo_dir
         self.pid_dir = self.pmo_dir / "pids"
         self.log_dir = self.pmo_dir / "logs"
@@ -32,7 +34,11 @@ class ServiceManager:
         self.start_times = {}
         # 存储服务重启次数
         self.restarts = {}
+        # 存储从.env文件加载的环境变量
+        self.dotenv_vars = {}
         self._ensure_dirs()
+        # 加载.env文件
+        self._load_dotenv()
         self.services = self._load_config()
         # 加载现有的服务启动时间
         self._load_start_times()
@@ -43,6 +49,21 @@ class ServiceManager:
         """Create required directories if they don't exist."""
         self.pid_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _load_dotenv(self):
+        """Load environment variables from .env file if it exists."""
+        dotenv_path = Path(self.config_dir) / ".env"
+        
+        if not dotenv_path.exists():
+            logger.debug(f"No .env file found at {dotenv_path}")
+            return
+        
+        try:
+            # 使用 python-dotenv 加载环境变量
+            self.dotenv_vars = dotenv_values(dotenv_path)
+            logger.info(f"Loaded {len(self.dotenv_vars)} environment variables from {dotenv_path}")
+        except Exception as e:
+            logger.error(f"Error loading .env file: {str(e)}")
     
     def _load_start_times(self):
         """加载已运行服务的启动时间"""
@@ -220,6 +241,9 @@ class ServiceManager:
         if "env" in config and isinstance(config["env"], dict):
             config_env = {k: str(v) for k, v in config["env"].items()}
             env.update(config_env)
+        
+        # Add dotenv variables
+        env.update(self.dotenv_vars)
             
         # Prepare working directory
         cwd = config.get("cwd", None)
