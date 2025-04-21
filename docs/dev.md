@@ -91,6 +91,30 @@ service-name:
     ENV_VAR2: value2
 ```
 
+### Environment Variables from .env Files
+
+PMO automatically loads environment variables from a `.env` file located in the same directory as `pmo.yml`. These variables are applied to all services, with service-specific environment variables taking precedence if the same variable is defined in both places.
+
+The `.env` file follows standard dotenv format:
+
+```
+# Comments are supported
+DATABASE_URL=postgres://localhost:5432/mydb
+API_KEY=secret-key-value
+DEBUG=true
+```
+
+Implementation details:
+- PMO uses the `python-dotenv` library to parse the `.env` file
+- Variables loaded from `.env` are applied to all services
+- Service-specific environment variables (defined in `pmo.yml`) override variables from `.env` 
+- Environment variables inherited from the parent process are preserved
+
+This is particularly useful for:
+- Storing sensitive credentials (API keys, passwords) outside of version control
+- Sharing common environment configuration across multiple services
+- Setting development-specific variables without modifying service definitions
+
 ## Resource Monitoring
 
 PMO monitors:
