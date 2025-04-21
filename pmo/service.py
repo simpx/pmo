@@ -193,19 +193,19 @@ class ServiceManager:
         """Get list of currently running services."""
         return [name for name in self.get_service_names() if self.is_running(name)]
     
-    def start(self, service_name: str, dryrun: bool = False) -> bool:
+    def start(self, service_name: str, dry_run: bool = False) -> bool:
         """
         Start a specified service.
         
         Args:
             service_name: 服务名称
-            dryrun: 若为True，只返回将要执行的命令而不实际执行
+            dry_run: 若为True，只返回将要执行的命令而不实际执行
         """
         if service_name not in self.services:
             logger.error(f"Service '{service_name}' not found in configuration.")
             return False
             
-        if self.is_running(service_name) and not dryrun:
+        if self.is_running(service_name) and not dry_run:
             logger.info(f"Service '{service_name}' is already running.")
             return True
             
@@ -224,7 +224,7 @@ class ServiceManager:
         # Prepare working directory
         cwd = config.get("cwd", None)
         
-        if dryrun:
+        if dry_run:
             # 构造将要执行的命令字符串，但不执行
             cmd_str = ""
             
@@ -245,7 +245,7 @@ class ServiceManager:
             console.print(f"[bold cyan]{service_name}[/]: {cmd_str}")
             return True
         
-        # 非dryrun模式下的实际执行代码
+        # 非dry-run模式下的实际执行代码
         env_copy = os.environ.copy()
         if env:
             env_copy.update(env)

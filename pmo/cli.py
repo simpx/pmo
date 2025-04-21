@@ -49,7 +49,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     start_parser = subparsers.add_parser('start', help=f'{Emojis.START} Start services')
     start_parser.add_argument('service', nargs='?', default='all', 
                             help='Service name or "all" to start all services')
-    start_parser.add_argument('--dryrun', action='store_true',
+    start_parser.add_argument('--dry-run', action='store_true',
                             help='Show commands to execute without running them')
     
     # Stop command
@@ -81,7 +81,7 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     return parser
 
-def handle_start(manager: ServiceManager, service_name: str, dryrun: bool = False) -> bool:
+def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = False) -> bool:
     """Handle start command"""
     if service_name == 'all':
         service_names = manager.get_service_names()
@@ -89,29 +89,29 @@ def handle_start(manager: ServiceManager, service_name: str, dryrun: bool = Fals
             print_warning("No services defined in config.")
             return False
         
-        if dryrun:
+        if dry_run:
             console.print(f"{Emojis.INFO} Commands to execute (dry run):", style="running")
         else:
             console.print(f"{Emojis.START} Starting all services...", style="running")
             
         success = True
         for name in service_names:
-            if not manager.start(name, dryrun=dryrun):
+            if not manager.start(name, dry_run=dry_run):
                 print_error(f"Failed to start '{name}'")
                 success = False
             else:
-                if not dryrun:
+                if not dry_run:
                     print_success(f"Service '{name}' started")
         
-        if success and not dryrun:
+        if success and not dry_run:
             print_success("All services started successfully!")
         elif not success:
             print_warning("Some services failed to start, check logs for details.")
         
         return success
     else:
-        result = manager.start(service_name, dryrun=dryrun)
-        if result and not dryrun:
+        result = manager.start(service_name, dry_run=dry_run)
+        if result and not dry_run:
             print_success(f"Service '{service_name}' started")
         elif not result:
             print_error(f"Failed to start '{service_name}'")
@@ -328,7 +328,7 @@ def main():
     # Handle commands
     try:
         if args.command == 'start':
-            success = handle_start(service_manager, args.service, args.dryrun)
+            success = handle_start(service_manager, args.service, args.dry_run)
         elif args.command == 'stop':
             success = handle_stop(service_manager, args.service)
         elif args.command == 'restart':
