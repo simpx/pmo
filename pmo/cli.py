@@ -47,19 +47,19 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     # Start command
     start_parser = subparsers.add_parser('start', help=f'{Emojis.START} Start services')
-    start_parser.add_argument('service', nargs='?', default='all', 
+    start_parser.add_argument('service', nargs='?', 
                             help='Service name or "all" to start all services')
     start_parser.add_argument('--dry-run', action='store_true',
                             help='Show commands to execute without running them')
     
     # Stop command
     stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} Stop services')
-    stop_parser.add_argument('service', nargs='?', default='all',
+    stop_parser.add_argument('service', nargs='?',
                            help='Service name or "all" to stop all services')
     
     # Restart command
     restart_parser = subparsers.add_parser('restart', help=f'{Emojis.RESTART} Restart services')
-    restart_parser.add_argument('service', nargs='?', default='all',
+    restart_parser.add_argument('service', nargs='?',
                               help='Service name or "all" to restart all services')
     
     # Log command
@@ -81,8 +81,21 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     
     return parser
 
+def show_service_prompt(manager: ServiceManager, command: str) -> None:
+    """Helper function to show prompt when no service is specified"""
+    print_warning(f"Please specify a service name or 'all' to {command} all services.")
+    print_info(f"Usage: pmo {command} <service-name> or pmo {command} all")
+    service_names = manager.get_service_names()
+    if service_names:
+        print_info(f"Available services: {', '.join(service_names)}")
+
 def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = False) -> bool:
     """Handle start command"""
+    # Check if service_name is None (user ran just 'pmo start')
+    if service_name is None:
+        show_service_prompt(manager, "start")
+        return False
+        
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
@@ -119,6 +132,11 @@ def handle_start(manager: ServiceManager, service_name: str, dry_run: bool = Fal
 
 def handle_stop(manager: ServiceManager, service_name: str) -> bool:
     """Handle stop command"""
+    # Check if service_name is None (user ran just 'pmo stop')
+    if service_name is None:
+        show_service_prompt(manager, "stop")
+        return False
+        
     if service_name == 'all':
         service_names = manager.get_running_services()
         if not service_names:
@@ -150,6 +168,11 @@ def handle_stop(manager: ServiceManager, service_name: str) -> bool:
 
 def handle_restart(manager: ServiceManager, service_name: str) -> bool:
     """Handle restart command"""
+    # Check if service_name is None (user ran just 'pmo restart')
+    if service_name is None:
+        show_service_prompt(manager, "restart")
+        return False
+        
     if service_name == 'all':
         service_names = manager.get_service_names()
         if not service_names:
