@@ -8,6 +8,7 @@ A lightweight process manager inspired by PM2, but designed primarily for develo
 - Simple YAML configuration
 - Real-time logs with highlight
 - Environment variable support
+- Automatic `.env` file loading
 
 ## Installation
 
@@ -33,13 +34,21 @@ api-server:
     NODE_ENV: development
 ```
 
-2. Start your services:
+2. Optional: Create a `.env` file for shared environment variables:
+
+```
+# This will apply to all services
+DATABASE_URL=postgres://localhost:5432/mydb
+DEBUG=true
+```
+
+3. Start your services:
 
 ```bash
 pmo start
 ```
 
-3. List your services:
+4. List your services:
 
 ```bash
 pmo ls
@@ -57,8 +66,6 @@ Output:
 +---------------------------------------------------------------------------------------------------------------------+
 ```
 
-
-
 ### Commands
 
 ```
@@ -66,7 +73,9 @@ pmo start   [all | service-name | service-id]
 pmo stop    [all | service-name | service-id]
 pmo restart [all | service-name | service-id]
 pmo log     [all | service-name | service-id]
+pmo flush   [all | service-name | service-id]
 pmo ls
+
 ```
 
 ## Configuration
