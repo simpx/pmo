@@ -52,6 +52,11 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     start_parser.add_argument('--dry-run', action='store_true',
                             help='Show commands to execute without running them')
     
+    # Dry-run command (shortcut for start --dry-run)
+    dry_run_parser = subparsers.add_parser('dry-run', help=f'{Emojis.INFO} Show commands to execute without running them')
+    dry_run_parser.add_argument('service', nargs='*', 
+                              help='Service names or IDs (multiple allowed) or "all" to show all service commands')
+    
     # Stop command
     stop_parser = subparsers.add_parser('stop', help=f'{Emojis.STOP} Stop services')
     stop_parser.add_argument('service', nargs='*',
@@ -450,6 +455,10 @@ def main():
     try:
         if args.command == 'start':
             success = handle_start(service_manager, args.service, args.dry_run)
+        elif args.command == 'dry-run':
+            # When no services are specified, default to 'all'
+            services = args.service if args.service else ['all']
+            success = handle_start(service_manager, services, dry_run=True)
         elif args.command == 'stop':
             success = handle_stop(service_manager, args.service)
         elif args.command == 'restart':
