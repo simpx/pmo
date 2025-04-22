@@ -74,6 +74,7 @@ pmo stop    [all | service-name | service-id]
 pmo restart [all | service-name | service-id]
 pmo log     [all | service-name | service-id]
 pmo flush   [all | service-name | service-id]
+pmo dry-run [all | service-name | service-id]
 pmo ls
 
 ```
