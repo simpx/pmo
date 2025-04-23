@@ -67,8 +67,8 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     restart_parser.add_argument('service', nargs='*',
                               help='Service names or IDs (multiple allowed) or "all" to restart all services')
     
-    # Log command
-    log_parser = subparsers.add_parser('log', help=f'{Emojis.LOG} View service logs')
+    # Log command with 'logs' as an alias
+    log_parser = subparsers.add_parser('logs', aliases=['log'], help=f'{Emojis.LOG} View service logs')
     log_parser.add_argument('service', nargs='*', default=['all'],
                           help='Service names or IDs (multiple allowed) or "all" to view all logs')
     log_parser.add_argument('--no-follow', '-n', action='store_true',
@@ -471,7 +471,7 @@ def main():
             success = handle_stop(service_manager, args.service)
         elif args.command == 'restart':
             success = handle_restart(service_manager, args.service)
-        elif args.command == 'log':
+        elif args.command == 'log' or args.command == 'logs':
             success = handle_log(service_manager, log_manager, args)
         elif args.command == 'ls':
             success = handle_list(service_manager)
