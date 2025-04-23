@@ -214,6 +214,75 @@ class ServiceManager:
         """Get list of currently running services."""
         return [name for name in self.get_service_names() if self.is_running(name)]
     
+    def _is_python_script(self, cmd: str, cwd: Optional[str] = None) -> bool:
+        """
+        使用纯Python方式检测指定命令是否为Python脚本
+        
+        通过两种方式检测:
+        1. 检查命令行是否以python命令开头
+        2. 如果不是，检查文件头和扩展名判断是否为Python脚本
+        
+        Args:
+            cmd: 要执行的命令
+            cwd: 命令的工作目录
+            
+        Returns:
+            bool: 如果是Python脚本则返回True，否则返回False
+        """
+        # 检查命令是否直接以python开头
+        if cmd.strip().startswith(('python', 'python3', '/usr/bin/python', 'python2')) or \
+           any(part.endswith(('python', 'python3', 'python2')) for part in cmd.split()):
+            return True
+            
+        # 如果命令不以python开头，尝试提取可能的脚本文件路径
+        cmd_parts = cmd.strip().split()
+        if not cmd_parts:
+            return False
+            
+        # 尝试获取可能的脚本文件路径（通常是命令的第一个部分）
+        possible_script = cmd_parts[0]
+        
+        # 如果路径不是绝对路径且有工作目录，拼接完整路径
+        script_path = possible_script
+        if not os.path.isabs(possible_script) and cwd:
+            script_path = os.path.join(cwd, possible_script)
+            
+        # 检查文件是否存在
+        if not os.path.exists(script_path) or not os.path.isfile(script_path):
+            return False
+            
+        # 根据文件扩展名判断
+        if script_path.endswith(('.py', '.pyw')):
+            return True
+        
+        # 如果没有.py扩展名，检查文件头部内容
+        try:
+            with open(script_path, 'rb') as f:
+                # 读取文件前面的内容进行分析
+                header = f.read(200)  # 读取前200字节足够判断
+                
+                # 检查是否存在Python的shebang行
+                if header.startswith(b'#!') and b'python' in header.split(b'\n')[0].lower():
+                    return True
+                
+                # 检查文件内容是否是典型的Python代码
+                # 将bytes转换为文本以便检查
+                try:
+                    header_text = header.decode('utf-8', errors='ignore')
+                    
+                    # 检查是否包含典型的Python导入语句
+                    if (re.search(r'^\s*(import|from)\s+\w+', header_text, re.MULTILINE) or
+                        re.search(r'^\s*def\s+\w+\s*\(', header_text, re.MULTILINE) or
+                        re.search(r'^\s*class\s+\w+', header_text, re.MULTILINE)):
+                        return True
+                except:
+                    pass  # 解码错误，继续其他检查
+                    
+        except (IOError, PermissionError):
+            pass  # 无法读取文件，放弃这种检测方式
+                
+        return False
+        
     def start(self, service_name: str, dry_run: bool = False) -> bool:
         """
         Start a specified service.
@@ -244,10 +313,15 @@ class ServiceManager:
         
         # Add dotenv variables
         env.update(self.dotenv_vars)
-            
+
         # Prepare working directory
         cwd = config.get("cwd", None)
         
+        # 使用纯Python方式检测是否为Python脚本
+        if self._is_python_script(cmd, cwd):
+            env['PYTHONUNBUFFERED'] = '1'
+            logger.debug(f"Auto-enabled unbuffered mode for Python process: {service_name}")
+            
         if dry_run:
             # 构造将要执行的命令字符串，但不执行
             cmd_str = ""

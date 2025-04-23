@@ -311,6 +311,13 @@ class LogManager:
                 has_new_data = False
                 
                 for (service, log_type), f in file_handlers.items():
+                    # Force file stat refresh to detect changes even with buffered writes
+                    try:
+                        # On some systems this can help detect file changes faster
+                        os.fstat(f.fileno())
+                    except Exception:
+                        pass
+                        
                     line = f.readline()
                     if line:
                         has_new_data = True
@@ -319,7 +326,8 @@ class LogManager:
                         console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
                 
                 if not has_new_data:
-                    time.sleep(0.1)
+                    # Use a short sleep interval to be more responsive to new output
+                    time.sleep(0.05)
                     
         except KeyboardInterrupt:
             console.print(f"\n[dim]Log following stopped[/]")
