@@ -251,13 +251,16 @@ class LogManager:
             print_warning("No services specified for log viewing.")
             return
 
+        # Create service ID mapping for display
+        service_ids = {name: str(i) for i, name in enumerate(service_names)}
+            
         # Check if log files exist
         log_files = []
         for service in service_names:
             service_logs = self.get_log_files(service)
             for log_type, log_path in service_logs.items():
                 if log_path.exists():
-                    log_files.append((service, log_type, log_path))
+                    log_files.append((service, log_type, log_path, service_ids[service]))
                 else:
                     style = "stderr_service" if log_type == "stderr" else "stdout_service" 
                     console.print(f"{Emojis.WARNING} No {log_type} log found for [{style}]{service}[/]", style="warning")
@@ -273,9 +276,9 @@ class LogManager:
         else:
             self._display_recent_logs(log_files, lines)
     
-    def _display_recent_logs(self, log_files: List[Tuple[str, str, Path]], lines: int):
+    def _display_recent_logs(self, log_files: List[Tuple[str, str, Path, str]], lines: int):
         """Display recent log lines"""
-        for service, log_type, log_path in log_files:
+        for service, log_type, log_path, service_id in log_files:
             # PM2-style title
             console.print(f"\n[dim]{log_path} last {lines} lines:[/]")
             
@@ -285,25 +288,27 @@ class LogManager:
                     content = f.readlines()
                     last_lines = content[-lines:] if len(content) >= lines else content
                     
-                    # Print each line, PM2 format
+                    # Print each line with service ID, PM2 format
                     for line in last_lines:
                         timestamp, message = self._parse_log_line(line)
                         style = "stderr_service" if log_type == "stderr" else "stdout_service"
-                        console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
+                        console.print(f"{service_id} | [{style}]{service}[/] | {timestamp}: {message}")
             except Exception as e:
                 print_error(f"Error reading log file: {str(e)}")
     
-    def _follow_logs(self, log_files: List[Tuple[str, str, Path]]):
+    def _follow_logs(self, log_files: List[Tuple[str, str, Path, str]]):
         """Follow logs in real-time (like tail -f)"""
         file_handlers = {}
+        service_ids = {}
         
         try:
             # Open all log files
-            for service, log_type, log_path in log_files:
+            for service, log_type, log_path, service_id in log_files:
                 f = open(log_path, 'r')
                 # Move to end of file
                 f.seek(0, os.SEEK_END)
                 file_handlers[(service, log_type)] = f
+                service_ids[(service, log_type)] = service_id
                 
             console.print(f"\n[dim]Following logs... (Press Ctrl+C to stop)[/]")
             
@@ -323,7 +328,8 @@ class LogManager:
                         has_new_data = True
                         timestamp, message = self._parse_log_line(line)
                         style = "stderr_service" if log_type == "stderr" else "stdout_service"
-                        console.print(f"[{style}]{service}[/] | {timestamp}: {message}")
+                        service_id = service_ids[(service, log_type)]
+                        console.print(f"{service_id} | [{style}]{service}[/] | {timestamp}: {message}")
                 
                 if not has_new_data:
                     # Use a short sleep interval to be more responsive to new output
