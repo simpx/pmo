@@ -235,7 +235,7 @@ class LogManager:
         
         return timestamp, content
     
-    def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None):
+    def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None, service_id_map: Dict[str, str] = None):
         """
         Display service logs
         
@@ -243,6 +243,7 @@ class LogManager:
             service_names: List of service names to view
             follow: Whether to follow logs in real-time (like tail -f)
             lines: Number of lines to show initially, defaults to self.default_tail_lines
+            service_id_map: Dictionary mapping service names to their IDs (from pmo ls)
         """
         if lines is None:
             lines = self.default_tail_lines
@@ -251,8 +252,9 @@ class LogManager:
             print_warning("No services specified for log viewing.")
             return
 
-        # Create service ID mapping for display
-        service_ids = {name: str(i) for i, name in enumerate(service_names)}
+        # If no service_id_map provided, create one (fallback to indexed IDs)
+        if service_id_map is None:
+            service_id_map = {name: str(i) for i, name in enumerate(service_names)}
             
         # Check if log files exist
         log_files = []
@@ -260,7 +262,9 @@ class LogManager:
             service_logs = self.get_log_files(service)
             for log_type, log_path in service_logs.items():
                 if log_path.exists():
-                    log_files.append((service, log_type, log_path, service_ids[service]))
+                    # Use ID from service_id_map if available, otherwise use fallback
+                    service_id = service_id_map.get(service, str(service_names.index(service)))
+                    log_files.append((service, log_type, log_path, service_id))
                 else:
                     style = "stderr_service" if log_type == "stderr" else "stdout_service" 
                     console.print(f"{Emojis.WARNING} No {log_type} log found for [{style}]{service}[/]", style="warning")

@@ -252,9 +252,13 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     if not service_names:
         print_warning("No valid services specified for viewing logs.")
         return False
-        
-    # Use LogManager to view logs
-    log_manager.tail_logs(service_names, follow=follow, lines=lines)
+    
+    # Create a dictionary of service names to their IDs consistent with pmo ls
+    all_services = manager.get_service_names()
+    service_id_map = {name: str(idx + 1) for idx, name in enumerate(all_services)}
+    
+    # Use LogManager to view logs with consistent IDs
+    log_manager.tail_logs(service_names, follow=follow, lines=lines, service_id_map=service_id_map)
     return True
 
 def handle_flush(manager: ServiceManager, log_manager: LogManager, service_specs: List[str]) -> bool:
