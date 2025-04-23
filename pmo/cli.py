@@ -73,8 +73,8 @@ def setup_arg_parser() -> argparse.ArgumentParser:
                           help='Service names or IDs (multiple allowed) or "all" to view all logs')
     log_parser.add_argument('--no-follow', '-n', action='store_true',
                           help='Do not follow logs in real-time')
-    log_parser.add_argument('--lines', '-l', type=int, default=10,
-                          help='Number of lines to show initially')
+    log_parser.add_argument('--lines', '-l', type=int, 
+                          help='Number of lines to show initially (default: 15 for all services, 30 for specific services)')
     
     # Flush command
     flush_parser = subparsers.add_parser('flush', help=f'{Emojis.LOG} Clear service logs')
@@ -232,7 +232,15 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     """Handle log command with support for multiple services"""
     service_specs = args.service
     follow = not args.no_follow
-    lines = args.lines
+    
+    # Set default line values based on whether specific services are specified
+    if args.lines is None:
+        if service_specs == ['all']:
+            lines = 15  # Default for 'all' services
+        else:
+            lines = 30  # Default when specific services are specified
+    else:
+        lines = args.lines
     
     # Check if no services specified (should not happen due to default=['all'])
     if not service_specs:
