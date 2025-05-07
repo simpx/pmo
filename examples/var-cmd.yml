@@ -1,0 +1,5 @@
+print-env:
+  cmd: echo "当前用户: ${USER}, 家目录: ${HOME}, 日期: $(date)"
+  env:
+    USER: "guest"
+    HOME: "/home/guest"
