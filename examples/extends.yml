@@ -1,0 +1,11 @@
+http-server-1: 
+  cmd: python -m http.server ${PORT:-8000}
+
+http-server-2: 
+  extends: http-server-1
+  env:
+    PORT: 8001
+
+udp-server:
+  extends: http-server-2
+  cmd: nc -l -4 -u -p ${PORT}

@@ -109,33 +109,76 @@ class ServiceManager:
                 self.restarts[service_name] = 0
         
     def _load_config(self) -> Dict[str, Any]:
-        """Load service configurations from pmo.yml."""
+        """Load service configurations from pmo.yml, supporting 'extends' inheritance."""
         if not os.path.exists(self.config_path):
             logger.error(f"Configuration file not found: {self.config_path}")
             return {}
-            
+
         try:
             with open(self.config_path, 'r') as file:
                 config = yaml.safe_load(file) or {}
-                
-            # Validate config and convert simple format to detailed format
-            validated_config = {}
+
+            # Step 1: 规范化所有服务配置
+            raw_config = {}
             for name, conf in config.items():
                 if name.lower() == "pmo":
                     logger.warning(f"'pmo' is a reserved name and cannot be used as a service name.")
                     continue
-                    
                 if isinstance(conf, str):
-                    validated_config[name] = {"cmd": conf}
-                elif isinstance(conf, dict) and "cmd" in conf:
-                    validated_config[name] = conf
-                elif isinstance(conf, dict) and "script" in conf:
-                    validated_config[name] = conf
-                    # Convert script to cmd for consistency
-                    validated_config[name]["cmd"] = conf["script"]
+                    raw_config[name] = {"cmd": conf}
+                elif isinstance(conf, dict):
+                    # 允许只包含 extends 的 dict，后续递归处理
+                    d = dict(conf)
+                    if "script" in d:
+                        d["cmd"] = d["script"]
+                    raw_config[name] = d
                 else:
                     logger.warning(f"Invalid configuration for service '{name}', skipping.")
-                    
+
+            # Step 2: 递归合并 extends
+            def merge_env(parent_env, child_env):
+                result = dict(parent_env or {})
+                result.update(child_env or {})
+                return result
+
+            def merge_service(parent, child):
+                merged = dict(parent)
+                merged.update(child)
+                # env 字典递归合并
+                if "env" in parent or "env" in child:
+                    merged["env"] = merge_env(parent.get("env"), child.get("env"))
+                return merged
+
+            def resolve_extends(name, seen=None):
+                if seen is None:
+                    seen = set()
+                if name in seen:
+                    raise ValueError(f"Circular extends detected for service '{name}'")
+                seen.add(name)
+                conf = raw_config.get(name)
+                if conf is None:
+                    raise ValueError(f"Service '{name}' not found for extends")
+                if "extends" in conf:
+                    parent_name = conf["extends"]
+                    if parent_name not in raw_config:
+                        raise ValueError(f"Service '{name}' extends unknown service '{parent_name}'")
+                    parent_conf = resolve_extends(parent_name, seen)
+                    merged = merge_service(parent_conf, {k: v for k, v in conf.items() if k != "extends"})
+                    return merged
+                else:
+                    return dict(conf)
+
+            validated_config = {}
+            for name in raw_config:
+                try:
+                    merged = resolve_extends(name)
+                    if not isinstance(merged, dict) or "cmd" not in merged:
+                        logger.warning(f"Invalid configuration for service '{name}', skipping.")
+                        continue
+                    validated_config[name] = merged
+                except Exception as e:
+                    logger.error(f"Error resolving extends for service '{name}': {e}")
+
             return validated_config
         except Exception as e:
             logger.error(f"Error loading configuration: {str(e)}")
