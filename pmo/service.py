@@ -271,29 +271,27 @@ class ServiceManager:
         if service_name not in self.services:
             logger.error(f"Service '{service_name}' not found in configuration.")
             return False
-            
         if self.is_running(service_name) and not dry_run:
             logger.info(f"Service '{service_name}' is already running.")
             return True
-            
         config = self.services[service_name]
         cmd = config.get("cmd")
         if not cmd:
             logger.error(f"No command specified for service '{service_name}'.")
             return False
-            
-        # Prepare environment variables
-        env = {}
+        # Prepare environment variables (优先级: config.env > .env > os.environ)
+        from pmo.util import substitute_env_vars
+        env = dict(os.environ)
         if "env" in config and isinstance(config["env"], dict):
             config_env = {k: str(v) for k, v in config["env"].items()}
+            env.update(self.dotenv_vars)
             env.update(config_env)
-        
-        # Add dotenv variables
-        env.update(self.dotenv_vars)
-
+        else:
+            env.update(self.dotenv_vars)
+        # 环境变量替换: 支持 ${VAR}、${VAR:-default} 语法
+        cmd = substitute_env_vars(cmd, env)
         # Prepare working directory
         cwd = config.get("cwd", None)
-        
         # 使用纯Python方式检测是否为Python脚本
         if self._is_python_script(cmd, cwd):
             env['PYTHONUNBUFFERED'] = '1'
