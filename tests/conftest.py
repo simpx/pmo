@@ -17,7 +17,12 @@ def temp_dir():
     os.chdir(tmp_dir)
     
     # 确保 .pmo 目录的父目录存在
-    pmo_dir = Path(tmp_dir) / '.pmo'
+    pmo_base_dir = Path(tmp_dir) / '.pmo'
+    pmo_base_dir.mkdir(exist_ok=True)
+    # 创建主机名特定的子目录
+    import socket
+    hostname = socket.gethostname()
+    pmo_dir = pmo_base_dir / hostname
     pmo_dir.mkdir(exist_ok=True)
     logs_dir = pmo_dir / 'logs'
     logs_dir.mkdir(exist_ok=True)

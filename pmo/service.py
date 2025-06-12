@@ -8,6 +8,7 @@ import yaml
 import logging
 import time
 import psutil
+import socket
 from pathlib import Path
 from datetime import datetime
 import re
@@ -36,7 +37,10 @@ class ServiceManager:
         # 修改为使用配置文件所在目录
         config_dir = os.path.dirname(os.path.abspath(config_path))
         self.config_dir = config_dir
-        self.pmo_dir = Path(config_dir) / pmo_dir
+        self.pmo_base_dir = Path(config_dir) / pmo_dir
+        # 使用主机名创建子目录，使多台机器可共享同一个NAS
+        hostname = socket.gethostname()
+        self.pmo_dir = self.pmo_base_dir / hostname
         self.pid_dir = self.pmo_dir / "pids"
         self.log_dir = self.pmo_dir / "logs"
         # 存储服务启动时间，用于计算运行时长

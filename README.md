@@ -9,6 +9,7 @@ A lightweight process manager inspired by PM2, but designed primarily for develo
 - Real-time logs with highlight
 - Environment variable support
 - Automatic `.env` file loading
+- Multi-machine support with hostname-specific directories (for shared NAS environments)
 
 ## Installation
 
@@ -94,6 +95,22 @@ The `pmo.yml` file supports two formats:
    ```
 
 PMO manages runtime data in the `.pmo` directory with logs and PID files.
+
+### Multi-machine Support
+
+PMO now supports multiple machines sharing the same configuration through a shared filesystem (like NAS). Each machine will store its process information in a hostname-specific directory:
+
+```
+.pmo/
+  hostname1/
+    pids/
+    logs/
+  hostname2/
+    pids/
+    logs/
+```
+
+This allows processes on different machines to be managed separately even when sharing the same configuration files.
 
 ## License
 

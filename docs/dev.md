@@ -16,14 +16,17 @@ The PMO runtime uses a `.pmo` directory that maintains the following structure:
 
 ```
 .pmo/
-├── logs/
-│   ├── [service-name]-out.log    # Standard output logs
-│   └── [service-name]-error.log  # Error logs
-├── pids/
-│   ├── [service-name].pid        # Process ID files
-│   ├── [service-name].time       # Service start time records
-│   └── [service-name].restarts   # Restart count tracking
+├── [hostname]/                  # Hostname-specific directory for multi-machine support
+│   ├── logs/
+│   │   ├── [service-name]-out.log    # Standard output logs
+│   │   └── [service-name]-error.log  # Error logs
+│   ├── pids/
+│   │   ├── [service-name].pid        # Process ID files
+│   │   ├── [service-name].time       # Service start time records
+│   │   └── [service-name].restarts   # Restart count tracking
 ```
+
+This structure allows multiple machines to share a configuration through a common filesystem (like NAS) while maintaining separate process information.
 
 ## Core Components
 
