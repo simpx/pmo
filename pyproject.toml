@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pmo"
-version = "0.3.17"
+version = "0.3.18"
 description = "simple process manager"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "simpxx", email = "simpxx@gmail.com"}
