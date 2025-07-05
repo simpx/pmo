@@ -258,6 +258,40 @@ class ServiceManager:
             # Process exists but we don't have permission to send signals to it
             return True
     
+    def _is_process_effectively_stopped(self, pid: int) -> bool:
+        """Check if process is effectively stopped (including defunct/zombie processes)."""
+        try:
+            proc = psutil.Process(pid)
+            status = proc.status()
+            # Consider defunct/zombie processes as effectively stopped
+            return status in [psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD]
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return True  # Process doesn't exist or we can't access it
+        except Exception:
+            # Fall back to basic check
+            return not self._is_process_running(pid)
+    
+    def _count_active_processes(self, pids: List[int]) -> tuple:
+        """Count active processes, distinguishing between running and defunct."""
+        active_count = 0
+        defunct_count = 0
+        
+        for pid in pids:
+            if self._is_process_running(pid):
+                try:
+                    proc = psutil.Process(pid)
+                    status = proc.status()
+                    if status in [psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD]:
+                        defunct_count += 1
+                    else:
+                        active_count += 1
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass  # Process disappeared, don't count it
+                except Exception:
+                    active_count += 1  # Assume it's active if we can't determine
+        
+        return active_count, defunct_count
+    
     def is_running(self, service_name: str) -> bool:
         """Check if a service is running."""
         return self.get_service_pid(service_name) is not None
@@ -412,7 +446,7 @@ class ServiceManager:
             logger.error(f"Failed to start service '{service_name}': {str(e)}")
             return False
     
-    def stop(self, service_name: str, timeout: int = 5) -> bool:
+    def stop(self, service_name: str, timeout: int = 15) -> bool:
         """Stop a specified service and all its child processes with progress feedback."""
         pid = self.get_service_pid(service_name)
         if not pid:
@@ -442,22 +476,44 @@ class ServiceManager:
                     continue
             
             # Wait for processes to terminate gracefully with progress
+            defunct_timeout = timeout * 2  # Give more time for defunct processes
+            
             for attempt in range(timeout):
-                remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+                active_count, defunct_count = self._count_active_processes(process_tree_pids)
                 
-                if not remaining_pids:
+                if active_count == 0 and defunct_count == 0:
                     console.print(f"[green]✓[/] All processes terminated gracefully")
                     break
-                    
-                console.print(f"[dim]Waiting for {len(remaining_pids)} processes to terminate... ({attempt + 1}/{timeout})[/]")
-                if attempt < timeout - 1:
-                    time.sleep(1)
+                elif active_count == 0 and defunct_count > 0:
+                    # Only defunct processes remain, give them more time
+                    if attempt < timeout - 1:
+                        console.print(f"[yellow]⏳[/] Waiting for {defunct_count} defunct processes to clean up... ({attempt + 1}/{timeout})")
+                        time.sleep(2)  # Longer wait for defunct processes
+                    else:
+                        console.print(f"[blue]ℹ[/] {defunct_count} defunct processes detected, extending wait time...")
+                        # Extended wait for defunct processes
+                        for extra_attempt in range(defunct_timeout):
+                            active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                            if defunct_count == 0:
+                                console.print(f"[green]✓[/] All defunct processes cleaned up")
+                                break
+                            console.print(f"[dim]Waiting for {defunct_count} defunct processes... ({extra_attempt + 1}/{defunct_timeout})[/]")
+                            if extra_attempt < defunct_timeout - 1:
+                                time.sleep(2)
+                        break
+                else:
+                    console.print(f"[dim]Waiting for {active_count} active processes to terminate... ({attempt + 1}/{timeout})[/]")
+                    if attempt < timeout - 1:
+                        time.sleep(1)
             
             # Force kill with SIGKILL if needed
-            remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+            active_count, defunct_count = self._count_active_processes(process_tree_pids)
             
-            if remaining_pids:
-                console.print(f"[red]💀[/] Force killing {len(remaining_pids)} remaining processes...")
+            if active_count > 0:
+                console.print(f"[red]💀[/] Force killing {active_count} remaining active processes...")
+                
+                # Get only the active processes for force killing
+                active_pids = [pid for pid in process_tree_pids if self._is_process_running(pid) and not self._is_process_effectively_stopped(pid)]
                 
                 # Try to kill the process group with SIGKILL
                 try:
@@ -466,43 +522,52 @@ class ServiceManager:
                     pass
                 
                 # Force kill individual remaining processes
-                for process_pid in remaining_pids:
+                for process_pid in active_pids:
                     try:
                         os.kill(process_pid, signal.SIGKILL)
                     except (ProcessLookupError, PermissionError):
                         continue
                 
                 # Wait for force kill to take effect
-                time.sleep(1)
+                time.sleep(2)
                 
                 # Final check
-                final_remaining = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+                final_active, final_defunct = self._count_active_processes(process_tree_pids)
                 
-                if final_remaining:
-                    console.print(f"[red]⚠[/] {len(final_remaining)} processes are stubborn, trying psutil...")
+                if final_active > 0:
+                    console.print(f"[red]⚠[/] {final_active} processes are stubborn, trying psutil...")
                     
                     # Use psutil for stubborn processes
-                    for process_pid in final_remaining:
-                        try:
-                            proc = psutil.Process(process_pid)
-                            proc.kill()
-                            proc.wait(timeout=2)
-                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, psutil.TimeoutExpired):
-                            continue
-                        except Exception:
-                            continue
+                    for process_pid in process_tree_pids:
+                        if self._is_process_running(process_pid) and not self._is_process_effectively_stopped(process_pid):
+                            try:
+                                proc = psutil.Process(process_pid)
+                                proc.kill()
+                                proc.wait(timeout=3)
+                            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, psutil.TimeoutExpired):
+                                continue
+                            except Exception:
+                                continue
                     
                     # Ultimate final check
-                    time.sleep(1)
-                    absolutely_final = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+                    time.sleep(2)
+                    absolutely_final_active, absolutely_final_defunct = self._count_active_processes(process_tree_pids)
                     
-                    if absolutely_final:
-                        logger.error(f"Failed to kill {len(absolutely_final)} stubborn processes: {absolutely_final}")
-                        console.print(f"[red]✗[/] {len(absolutely_final)} processes could not be terminated")
+                    if absolutely_final_active > 0:
+                        logger.error(f"Failed to kill {absolutely_final_active} stubborn processes")
+                        console.print(f"[red]✗[/] {absolutely_final_active} processes could not be terminated")
+                        if absolutely_final_defunct > 0:
+                            console.print(f"[blue]ℹ[/] {absolutely_final_defunct} defunct processes will clean up eventually")
                     else:
-                        console.print(f"[green]✓[/] All processes terminated successfully")
+                        console.print(f"[green]✓[/] All active processes terminated successfully")
+                        if absolutely_final_defunct > 0:
+                            console.print(f"[blue]ℹ[/] {absolutely_final_defunct} defunct processes will clean up eventually")
                 else:
-                    console.print(f"[green]✓[/] All processes terminated successfully")
+                    console.print(f"[green]✓[/] All active processes terminated successfully")
+                    if final_defunct > 0:
+                        console.print(f"[blue]ℹ[/] {final_defunct} defunct processes will clean up eventually")
+            elif defunct_count > 0:
+                console.print(f"[blue]ℹ[/] Only {defunct_count} defunct processes remain, they will clean up eventually")
             
             # Clean up files
             pid_file = self.get_pid_file(service_name)
@@ -516,14 +581,16 @@ class ServiceManager:
             if start_time_file.exists():
                 os.remove(start_time_file)
             
-            # Check final status - only return False if processes are actually still running
-            final_check = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+            # Check final status - only return False if active processes are actually still running
+            final_active, final_defunct = self._count_active_processes(process_tree_pids)
             
-            if final_check:
-                logger.warning(f"Service '{service_name}' stopped with {len(final_check)} processes remaining")
+            if final_active > 0:
+                logger.error(f"Service '{service_name}' stop failed: {final_active} active processes still running")
                 return False
             else:
                 logger.info(f"Service '{service_name}' stopped successfully")
+                if final_defunct > 0:
+                    logger.info(f"Service '{service_name}' has {final_defunct} defunct processes that will clean up eventually")
                 return True
                 
         except ProcessLookupError:
