@@ -522,7 +522,7 @@ class ServiceManager:
                         elif active_count == 0 and defunct_count > 0:
                             # Only defunct processes remain
                             console.print(f"[blue]ℹ[/] {defunct_count} zombie processes remain (cleaning up automatically)")
-                            console.print(f"[dim]Press Enter to exit safely - zombies will finish cleanup in background[/]")
+                            console.print(f"Press Enter to exit safely - zombies will finish cleanup in background")
                             
                             # Use input() to wait for user Enter key
                             try:
