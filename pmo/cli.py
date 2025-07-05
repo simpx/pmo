@@ -415,7 +415,8 @@ def print_service_status(manager: ServiceManager, service_name: str) -> None:
     process_table.add_column("CPU", justify="right", width=8)
     process_table.add_column("Memory", justify="right", width=10)
     process_table.add_column("Status", width=10)
-    process_table.add_column("Command", overflow="fold", no_wrap=False)
+    # Command列允许换行显示完整命令
+    process_table.add_column("Command", no_wrap=False, overflow="fold")
     
     if tree_info["main_process"]:
         main_proc = tree_info["main_process"]
