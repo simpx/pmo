@@ -477,49 +477,23 @@ class ServiceManager:
             
             # Wait for processes to terminate gracefully with progress
             for attempt in range(timeout):
-                active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
                 
-                if active_count == 0 and defunct_count == 0:
+                if not remaining_pids:
                     console.print(f"[green]✓[/] All processes terminated gracefully")
                     break
-                elif active_count == 0 and defunct_count > 0:
-                    # Only defunct processes remain, handle them separately
-                    console.print(f"[blue]ℹ[/] {defunct_count} defunct/zombie processes detected")
-                    console.print(f"[blue]ℹ[/] These processes MAY cleaning up GPU/system resources...")
-                    console.print(f"[dim]You can press Ctrl+C to exit PMO (processes will continue cleaning up)[/]")
                     
-                    # Extended wait for defunct processes (30 seconds)
-                    defunct_timeout = 30
-                    try:
-                        for extra_attempt in range(defunct_timeout):
-                            active_count, defunct_count = self._count_active_processes(process_tree_pids)
-                            if defunct_count == 0:
-                                console.print(f"[green]✓[/] All defunct processes cleaned up")
-                                break
-                            
-                            elapsed = extra_attempt + 1
-                            remaining = defunct_timeout - elapsed
-                            console.print(f"[dim]Waiting for {defunct_count} defunct processes... {elapsed}s elapsed, {remaining}s remaining[/]")
-                            time.sleep(1)
-                    except KeyboardInterrupt:
-                        console.print(f"[yellow]⚠[/] User interrupted. {defunct_count} defunct processes will continue cleaning up in background.")
-                        return True
-                    break
-                else:
-                    elapsed = attempt + 1
-                    remaining = timeout - elapsed
-                    console.print(f"[dim]Waiting for {active_count} active processes... {elapsed}s elapsed, {remaining}s remaining[/]")
-                    if attempt < timeout - 1:
-                        time.sleep(1)
+                elapsed = attempt + 1
+                remaining = timeout - elapsed
+                console.print(f"[dim]Waiting for {len(remaining_pids)} processes... {elapsed}s elapsed, {remaining}s remaining[/]")
+                if attempt < timeout - 1:
+                    time.sleep(1)
             
             # Force kill with SIGKILL if needed
-            active_count, defunct_count = self._count_active_processes(process_tree_pids)
+            remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
             
-            if active_count > 0:
-                console.print(f"[red]💀[/] Force killing {active_count} remaining active processes...")
-                
-                # Get only the active processes for force killing
-                active_pids = [pid for pid in process_tree_pids if self._is_process_running(pid) and not self._is_process_effectively_stopped(pid)]
+            if remaining_pids:
+                console.print(f"[red]💀[/] Force killing {len(remaining_pids)} remaining processes...")
                 
                 # Try to kill the process group with SIGKILL
                 try:
@@ -528,54 +502,113 @@ class ServiceManager:
                     pass
                 
                 # Force kill individual remaining processes
-                for process_pid in active_pids:
+                for process_pid in remaining_pids:
                     try:
                         os.kill(process_pid, signal.SIGKILL)
                     except (ProcessLookupError, PermissionError):
                         continue
                 
-                # Wait for force kill to take effect
-                time.sleep(2)
+                # Extended wait after SIGKILL (60 seconds)
+                sigkill_timeout = 60
+                console.print(f"[yellow]⏳[/] Waiting up to {sigkill_timeout}s for processes to clean up after SIGKILL...")
                 
-                # Final check
+                try:
+                    for extra_attempt in range(sigkill_timeout):
+                        active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                        
+                        if active_count == 0 and defunct_count == 0:
+                            console.print(f"[green]✓[/] All processes terminated successfully")
+                            break
+                        elif active_count == 0 and defunct_count > 0:
+                            # Only defunct processes remain
+                            console.print(f"[blue]ℹ[/] {defunct_count} zombie processes remain (cleaning up automatically)")
+                            console.print(f"[dim]Press Enter to exit safely - zombies will finish cleanup in background[/]")
+                            
+                            # Use input() to wait for user Enter key
+                            try:
+                                import threading
+                                import sys
+                                
+                                user_pressed_enter = threading.Event()
+                                
+                                def wait_for_enter():
+                                    try:
+                                        input()  # Wait for Enter key
+                                        user_pressed_enter.set()
+                                    except:
+                                        pass
+                                
+                                # Start thread to wait for user input
+                                input_thread = threading.Thread(target=wait_for_enter, daemon=True)
+                                input_thread.start()
+                                
+                                # Continue monitoring defunct processes
+                                while extra_attempt < sigkill_timeout:
+                                    # Check if user pressed Enter
+                                    if user_pressed_enter.is_set():
+                                        console.print(f"[yellow]⚠[/] User chose to exit. {defunct_count} defunct processes will continue cleaning up in background.")
+                                        break
+                                    
+                                    # Check process status again
+                                    active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                                    if defunct_count == 0:
+                                        console.print(f"[green]✓[/] All defunct processes cleaned up")
+                                        break
+                                    
+                                    elapsed = extra_attempt + 1
+                                    remaining = sigkill_timeout - elapsed
+                                    if elapsed % 5 == 0:  # Update every 5 seconds to reduce spam
+                                        console.print(f"[dim]Waiting for {defunct_count} defunct processes... {elapsed}s elapsed, {remaining}s remaining[/]")
+                                    
+                                    extra_attempt += 1
+                                    time.sleep(1)
+                            except:
+                                # Fallback if threading doesn't work
+                                while extra_attempt < sigkill_timeout:
+                                    active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                                    if defunct_count == 0:
+                                        console.print(f"[green]✓[/] All defunct processes cleaned up")
+                                        break
+                                    
+                                    elapsed = extra_attempt + 1
+                                    remaining = sigkill_timeout - elapsed
+                                    if elapsed % 5 == 0:
+                                        console.print(f"[dim]Waiting for {defunct_count} defunct processes... {elapsed}s elapsed, {remaining}s remaining[/]")
+                                    
+                                    extra_attempt += 1
+                                    time.sleep(1)
+                            break
+                        else:
+                            elapsed = extra_attempt + 1
+                            remaining = sigkill_timeout - elapsed
+                            console.print(f"[dim]Waiting for {active_count} active processes... {elapsed}s elapsed, {remaining}s remaining[/]")
+                            if extra_attempt < sigkill_timeout - 1:
+                                time.sleep(1)
+                
+                except KeyboardInterrupt:
+                    active_count, defunct_count = self._count_active_processes(process_tree_pids)
+                    if active_count > 0:
+                        console.print(f"[yellow]⚠[/] User interrupted. {active_count} active and {defunct_count} defunct processes remain.")
+                        console.print(f"[yellow]⚠[/] PMO will clean up files, but please manually kill remaining processes if needed.")
+                        logger.warning(f"Service '{service_name}' stop interrupted: {active_count} active processes still running")
+                    else:
+                        console.print(f"[yellow]⚠[/] User interrupted. {defunct_count} defunct processes will continue cleaning up in background.")
+                
+                # Final check after timeout
                 final_active, final_defunct = self._count_active_processes(process_tree_pids)
                 
                 if final_active > 0:
-                    console.print(f"[red]⚠[/] {final_active} processes are stubborn, trying psutil...")
-                    
-                    # Use psutil for stubborn processes
-                    for process_pid in process_tree_pids:
-                        if self._is_process_running(process_pid) and not self._is_process_effectively_stopped(process_pid):
-                            try:
-                                proc = psutil.Process(process_pid)
-                                proc.kill()
-                                proc.wait(timeout=3)
-                            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, psutil.TimeoutExpired):
-                                continue
-                            except Exception:
-                                continue
-                    
-                    # Ultimate final check
-                    time.sleep(2)
-                    absolutely_final_active, absolutely_final_defunct = self._count_active_processes(process_tree_pids)
-                    
-                    if absolutely_final_active > 0:
-                        logger.error(f"Failed to kill {absolutely_final_active} stubborn processes")
-                        console.print(f"[red]✗[/] {absolutely_final_active} processes could not be terminated")
-                        if absolutely_final_defunct > 0:
-                            console.print(f"[blue]ℹ[/] {absolutely_final_defunct} defunct processes will clean up eventually")
-                    else:
-                        console.print(f"[green]✓[/] All active processes terminated successfully")
-                        if absolutely_final_defunct > 0:
-                            console.print(f"[blue]ℹ[/] {absolutely_final_defunct} defunct processes will clean up eventually")
-                else:
-                    console.print(f"[green]✓[/] All active processes terminated successfully")
-                    if final_defunct > 0:
-                        console.print(f"[blue]ℹ[/] {final_defunct} defunct processes will clean up eventually")
-            elif defunct_count > 0:
-                console.print(f"[blue]ℹ[/] Only {defunct_count} defunct processes remain, they will clean up eventually")
+                    console.print(f"[red]✗[/] Timeout: {final_active} processes could not be terminated after {sigkill_timeout}s")
+                    console.print(f"[red]⚠[/] PMO will clean up files, but please manually kill remaining processes:")
+                    # Show the PIDs of remaining processes
+                    remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid) and not self._is_process_effectively_stopped(pid)]
+                    console.print(f"[red]PIDs:[/] {', '.join(map(str, remaining_pids))}")
+                    console.print(f"[dim]You can use: kill -9 {' '.join(map(str, remaining_pids))}[/]")
+                    logger.error(f"Service '{service_name}' stop failed: {final_active} active processes still running after timeout")
+                elif final_defunct > 0:
+                    console.print(f"[yellow]⚠[/] Timeout: {final_defunct} defunct processes remain, but they will clean up eventually")
             
-            # Clean up files
+            # Always clean up files (PMO is a simple tool without daemon)
             pid_file = self.get_pid_file(service_name)
             if os.path.exists(pid_file):
                 os.remove(pid_file)
@@ -587,17 +620,17 @@ class ServiceManager:
             if start_time_file.exists():
                 os.remove(start_time_file)
             
-            # Check final status - only return False if active processes are actually still running
+            # Check final status for return value
             final_active, final_defunct = self._count_active_processes(process_tree_pids)
             
             if final_active > 0:
                 logger.error(f"Service '{service_name}' stop failed: {final_active} active processes still running")
-                return False
+                return False  # Failed to stop all active processes
             else:
                 logger.info(f"Service '{service_name}' stopped successfully")
                 if final_defunct > 0:
                     logger.info(f"Service '{service_name}' has {final_defunct} defunct processes that will clean up eventually")
-                return True
+                return True  # Successfully stopped (defunct processes are acceptable)
                 
         except ProcessLookupError:
             # Process already terminated
