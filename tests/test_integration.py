@@ -180,7 +180,7 @@ time.sleep(1)
         manager = ServiceManager(config_path=str(config_path))
         
         # 使用 CLI 函数启动服务
-        result = handle_start(manager, 'test-service')
+        result = handle_start(manager, ['test-service'])
         assert result is True
         
         # 验证服务已启动
@@ -202,7 +202,7 @@ time.sleep(1)
             assert test_service_exists, "服务应该在列表中并且状态为运行中"
         
         # 使用 CLI 函数停止服务
-        result = handle_stop(manager, 'test-service')
+        result = handle_stop(manager, ['test-service'])
         assert result is True
         
         # 验证服务已停止
@@ -223,7 +223,7 @@ time.sleep(1)
         
         # 模拟参数对象
         class Args:
-            service = 'test-service'
+            service = ['test-service']
             no_follow = True
             lines = 5
         
