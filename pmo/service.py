@@ -927,3 +927,52 @@ class ServiceManager:
     def get_restarts_count(self, service_name: str) -> int:
         """获取服务重启次数"""
         return self.restarts.get(service_name, 0)
+    
+    def get_all_hostnames(self) -> List[str]:
+        """获取所有存在服务的主机名"""
+        hostnames = []
+        try:
+            if self.pmo_base_dir.exists():
+                for hostname_dir in self.pmo_base_dir.iterdir():
+                    if hostname_dir.is_dir():
+                        # 检查是否有 pids 或 logs 目录
+                        pids_dir = hostname_dir / "pids"
+                        logs_dir = hostname_dir / "logs"
+                        if pids_dir.exists() or logs_dir.exists():
+                            # 检查是否有任何文件
+                            has_files = False
+                            if pids_dir.exists():
+                                has_files = any(pids_dir.iterdir())
+                            if not has_files and logs_dir.exists():
+                                has_files = any(logs_dir.iterdir())
+                            if has_files:
+                                hostnames.append(hostname_dir.name)
+        except Exception as e:
+            logger.debug(f"Error getting hostnames: {e}")
+        return sorted(hostnames)
+    
+    def get_remote_log_dir(self, hostname: str) -> Path:
+        """获取指定主机名的日志目录"""
+        return self.pmo_base_dir / hostname / "logs"
+    
+    def get_remote_pid_dir(self, hostname: str) -> Path:
+        """获取指定主机名的PID目录"""
+        return self.pmo_base_dir / hostname / "pids"
+    
+    def get_remote_service_names(self, hostname: str) -> List[str]:
+        """获取指定主机名的服务名称列表"""
+        service_names = []
+        try:
+            pid_dir = self.get_remote_pid_dir(hostname)
+            if pid_dir.exists():
+                for pid_file in pid_dir.glob("*.pid"):
+                    service_name = pid_file.stem
+                    service_names.append(service_name)
+        except Exception as e:
+            logger.debug(f"Error getting remote service names for {hostname}: {e}")
+        return sorted(service_names)
+    
+    def get_remote_service_id_map(self, hostname: str) -> Dict[str, str]:
+        """获取指定主机名的服务ID映射"""
+        service_names = self.get_remote_service_names(hostname)
+        return {name: str(i + 1) for i, name in enumerate(service_names)}

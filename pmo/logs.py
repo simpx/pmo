@@ -146,7 +146,7 @@ class LogManager:
             'stderr': self.log_dir / f"{service_name}-error.log"
         }
     
-    def flush_logs(self, service_names: List[str] = None, running_services: List[str] = None) -> Dict[str, int]:
+    def flush_logs(self, service_names: Optional[List[str]] = None, running_services: Optional[List[str]] = None) -> Dict[str, int]:
         """
         清空日志文件
         
@@ -235,7 +235,7 @@ class LogManager:
         
         return timestamp, content
     
-    def tail_logs(self, service_names: List[str], follow: bool = True, lines: int = None, service_id_map: Dict[str, str] = None):
+    def tail_logs(self, service_names: List[str], follow: bool = True, lines: Optional[int] = None, service_id_map: Optional[Dict[str, str]] = None, hostname: Optional[str] = None):
         """
         Display service logs
         
@@ -244,6 +244,7 @@ class LogManager:
             follow: Whether to follow logs in real-time (like tail -f)
             lines: Number of lines to show initially, defaults to self.default_tail_lines
             service_id_map: Dictionary mapping service names to their IDs (from pmo ls)
+            hostname: Hostname prefix to display in log output
         """
         if lines is None:
             lines = self.default_tail_lines
@@ -270,6 +271,8 @@ class LogManager:
                     # Use Text object to avoid Rich markup parsing in service name
                     text = Text()
                     text.append(f"{Emojis.WARNING} No {log_type} log found for ")
+                    if hostname:
+                        text.append(f"{hostname}:")
                     text.append(service, style=style)
                     console.print(text, style="warning")
                     
@@ -279,12 +282,12 @@ class LogManager:
             
         if follow:
             # First show last few lines, then start following
-            self._display_recent_logs(log_files, lines)
-            self._follow_logs(log_files)
+            self._display_recent_logs(log_files, lines, hostname)
+            self._follow_logs(log_files, hostname)
         else:
-            self._display_recent_logs(log_files, lines)
+            self._display_recent_logs(log_files, lines, hostname)
     
-    def _display_recent_logs(self, log_files: List[Tuple[str, str, Path, str]], lines: int):
+    def _display_recent_logs(self, log_files: List[Tuple[str, str, Path, str]], lines: int, hostname: Optional[str] = None):
         """Display recent log lines"""
         for service, log_type, log_path, service_id in log_files:
             # PM2-style title
@@ -303,13 +306,15 @@ class LogManager:
                         # Use Text object to avoid Rich markup parsing in message content
                         text = Text()
                         text.append(f"{service_id} | ")
+                        if hostname:
+                            text.append(f"{hostname}:")
                         text.append(service, style=style)
                         text.append(f" | {timestamp}: {message}")
                         console.print(text)
             except Exception as e:
                 print_error(f"Error reading log file: {str(e)}")
     
-    def _follow_logs(self, log_files: List[Tuple[str, str, Path, str]]):
+    def _follow_logs(self, log_files: List[Tuple[str, str, Path, str]], hostname: Optional[str] = None):
         """Follow logs in real-time (like tail -f)"""
         file_handlers = {}
         service_ids = {}
@@ -345,6 +350,8 @@ class LogManager:
                         # Use Text object to avoid Rich markup parsing in message content
                         text = Text()
                         text.append(f"{service_id} | ")
+                        if hostname:
+                            text.append(f"{hostname}:")
                         text.append(service, style=style)
                         text.append(f" | {timestamp}: {message}")
                         console.print(text)

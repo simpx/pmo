@@ -5,10 +5,11 @@ Using Rich library for formatted terminal output
 """
 import os
 import sys
+import socket
 import argparse
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 
 from pmo.service import ServiceManager
 from pmo.logs import LogManager, Emojis
@@ -234,7 +235,7 @@ def handle_restart(manager: ServiceManager, service_specs: List[str]) -> bool:
     return success
 
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
-    """Handle log command with support for multiple services"""
+    """Handle log command with support for multiple services and remote hostnames"""
     service_specs = args.service
     follow = not args.no_follow
     
@@ -251,23 +252,41 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     if not service_specs:
         service_specs = ['all']
     
-    # Resolve service names, handling possible IDs or 'all'
-    service_names = resolve_multiple_services(manager, service_specs)
+    # Group services by hostname
+    local_services = []
+    remote_services = {}  # hostname -> [service_names]
     
-    if not service_names:
-        print_warning("No valid services specified for viewing logs.")
-        return False
+    for service_spec in service_specs:
+        hostname, services = resolve_remote_service_spec(manager, service_spec)
+        
+        if hostname is None:
+            # Local services
+            local_services.extend(services)
+        else:
+            # Remote services
+            if hostname not in remote_services:
+                remote_services[hostname] = []
+            remote_services[hostname].extend(services)
     
-    # Create a dictionary of service names to their IDs consistent with pmo ls
-    all_services = manager.get_service_names()
-    service_id_map = {name: str(idx + 1) for idx, name in enumerate(all_services)}
+    # Handle local services
+    if local_services:
+        all_services = manager.get_service_names()
+        service_id_map = {name: str(idx + 1) for idx, name in enumerate(all_services)}
+        log_manager.tail_logs(local_services, follow=follow, lines=lines, service_id_map=service_id_map)
     
-    # Use LogManager to view logs with consistent IDs
-    log_manager.tail_logs(service_names, follow=follow, lines=lines, service_id_map=service_id_map)
+    # Handle remote services
+    for hostname, services in remote_services.items():
+        if services:
+            console.print(f"\n[cyan]--- Logs from {hostname} ---[/]")
+            remote_log_dir = manager.get_remote_log_dir(hostname)
+            remote_log_manager = LogManager(remote_log_dir)
+            service_id_map = manager.get_remote_service_id_map(hostname)
+            remote_log_manager.tail_logs(services, follow=follow, lines=lines, service_id_map=service_id_map, hostname=hostname)
+    
     return True
 
 def handle_flush(manager: ServiceManager, log_manager: LogManager, service_specs: List[str]) -> bool:
-    """Handle flush command to clear logs with support for multiple services"""
+    """Handle flush command to clear logs with support for multiple services and remote hostnames"""
     # Check if no services specified (should not happen due to default=['all'])
     if not service_specs:
         service_specs = ['all']
@@ -275,54 +294,95 @@ def handle_flush(manager: ServiceManager, log_manager: LogManager, service_specs
     # Get running services list for proper log handling
     running_services = manager.get_running_services()
     
-    # If 'all' is specified, flush all logs
-    if 'all' in service_specs:
-        console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
-        result = log_manager.flush_logs(running_services=running_services)
-        deleted_count = result.get("deleted", 0)
-        cleared_count = result.get("cleared", 0)
+    # Group services by hostname
+    local_services = []
+    remote_services = {}  # hostname -> [service_names]
+    
+    for service_spec in service_specs:
+        hostname, services = resolve_remote_service_spec(manager, service_spec)
         
-        if deleted_count > 0 or cleared_count > 0:
-            if deleted_count > 0:
-                print_success(f"Successfully deleted {deleted_count} log files for non-running services")
-            if cleared_count > 0:
-                print_success(f"Successfully cleared content of {cleared_count} log files for running services")
+        if hostname is None:
+            # Local services
+            local_services.extend(services)
         else:
-            print_warning("No log files found to flush")
-    else:
-        # Resolve service names for specific services
-        service_names = resolve_multiple_services(manager, service_specs)
-        
-        if not service_names:
-            print_warning("No valid services specified for flushing logs.")
-            return False
+            # Remote services
+            if hostname not in remote_services:
+                remote_services[hostname] = []
+            remote_services[hostname].extend(services)
+    
+    # Handle local services
+    if local_services:
+        if 'all' in service_specs:
+            console.print(f"{Emojis.LOG} Flushing all logs...", style="warning")
+            result = log_manager.flush_logs(running_services=running_services)
+            deleted_count = result.get("deleted", 0)
+            cleared_count = result.get("cleared", 0)
             
-        if len(service_names) > 1:
-            console.print(f"{Emojis.LOG} Flushing logs for selected services...", style="warning")
-        
-        # Flush logs for each specified service
-        result = log_manager.flush_logs(service_names, running_services=running_services)
-        
-        success_count = 0
-        for service_name in service_names:
-            if service_name in result:
-                service_result = result[service_name]
-                deleted_count = service_result.get("deleted", 0)
-                cleared_count = service_result.get("cleared", 0)
-                
+            if deleted_count > 0 or cleared_count > 0:
                 if deleted_count > 0:
-                    print_success(f"Successfully deleted {deleted_count} log files for '{service_name}'")
-                    success_count += 1
+                    print_success(f"Successfully deleted {deleted_count} log files for non-running services")
                 if cleared_count > 0:
-                    print_success(f"Successfully cleared content of {cleared_count} log files for '{service_name}'")
-                    success_count += 1
-                if deleted_count == 0 and cleared_count == 0:
-                    print_warning(f"No log files found for '{service_name}'")
+                    print_success(f"Successfully cleared content of {cleared_count} log files for running services")
             else:
-                print_warning(f"No log files found for '{service_name}'")
-        
-        if success_count > 0 and len(service_names) > 1:
-            print_success(f"Successfully flushed logs for {success_count} service(s)")
+                print_warning("No log files found to flush")
+        else:
+            if len(local_services) > 1:
+                console.print(f"{Emojis.LOG} Flushing logs for selected services...", style="warning")
+            
+            result = log_manager.flush_logs(local_services, running_services=running_services)
+            
+            success_count = 0
+            for service_name in local_services:
+                if service_name in result:
+                    service_result = result[service_name]
+                    if isinstance(service_result, dict):
+                        deleted_count = service_result.get("deleted", 0)
+                        cleared_count = service_result.get("cleared", 0)
+                        
+                        if deleted_count > 0:
+                            print_success(f"Successfully deleted {deleted_count} log files for '{service_name}'")
+                            success_count += 1
+                        if cleared_count > 0:
+                            print_success(f"Successfully cleared content of {cleared_count} log files for '{service_name}'")
+                            success_count += 1
+                        if deleted_count == 0 and cleared_count == 0:
+                            print_warning(f"No log files found for '{service_name}'")
+                    else:
+                        print_warning(f"No log files found for '{service_name}'")
+                else:
+                    print_warning(f"No log files found for '{service_name}'")
+    
+    # Handle remote services
+    for hostname, services in remote_services.items():
+        if services:
+            console.print(f"\n[cyan]--- Flushing logs on {hostname} ---[/]")
+            remote_log_dir = manager.get_remote_log_dir(hostname)
+            remote_log_manager = LogManager(remote_log_dir)
+            
+            # Note: We can't know which services are running on remote hosts
+            # So we'll just flush the logs (delete them if they exist)
+            result = remote_log_manager.flush_logs(services, running_services=[])
+            
+            success_count = 0
+            for service_name in services:
+                if service_name in result:
+                    service_result = result[service_name]
+                    if isinstance(service_result, dict):
+                        deleted_count = service_result.get("deleted", 0)
+                        cleared_count = service_result.get("cleared", 0)
+                        
+                        if deleted_count > 0:
+                            print_success(f"Successfully deleted {deleted_count} log files for '{hostname}:{service_name}'")
+                            success_count += 1
+                        if cleared_count > 0:
+                            print_success(f"Successfully cleared content of {cleared_count} log files for '{hostname}:{service_name}'")
+                            success_count += 1
+                        if deleted_count == 0 and cleared_count == 0:
+                            print_warning(f"No log files found for '{hostname}:{service_name}'")
+                    else:
+                        print_warning(f"No log files found for '{hostname}:{service_name}'")
+                else:
+                    print_warning(f"No log files found for '{hostname}:{service_name}'")
     
     return True
 
@@ -511,9 +571,88 @@ def handle_list(manager: ServiceManager) -> bool:
     
     console.print(f"[dim]Config: {manager.config_path}[/]")
     console.print(f"[dim]Running: {len(manager.get_running_services())}/{len(service_names)}[/]")
+    
+    # Show all hostnames with services
+    all_hostnames = manager.get_all_hostnames()
+    current_hostname = socket.gethostname()
+    
+    if all_hostnames:
+        console.print(f"[dim]Hostnames with services: {', '.join(all_hostnames)}[/]")
+        remote_hostnames = [h for h in all_hostnames if h != current_hostname]
+        if remote_hostnames:
+            console.print(f"[dim]Remote hostnames: {', '.join(remote_hostnames)}[/]")
     console.print()
     
     return True
+
+def parse_hostname_service(service_spec: str) -> Tuple[Optional[str], str]:
+    """
+    Parse hostname:service format
+    
+    Args:
+        service_spec: Service specification in format "hostname:service" or just "service"
+        
+    Returns:
+        Tuple of (hostname, service_name), where hostname can be None for local services
+    """
+    if ':' in service_spec:
+        hostname, service_name = service_spec.split(':', 1)
+        return hostname, service_name
+    else:
+        return None, service_spec
+
+def resolve_remote_service_spec(manager: ServiceManager, service_spec: str) -> Tuple[Optional[str], List[str]]:
+    """
+    Resolve service specification that may include hostname
+    
+    Args:
+        manager: ServiceManager instance
+        service_spec: Service specification in format "hostname:service" or just "service"
+        
+    Returns:
+        Tuple of (hostname, service_names_list)
+    """
+    hostname, service_part = parse_hostname_service(service_spec)
+    
+    if hostname is None:
+        # Local service
+        if service_part == "all":
+            return None, manager.get_service_names()
+        else:
+            service_name = resolve_service_id(manager, service_part)
+            if service_name:
+                return None, [service_name]
+            else:
+                return None, []
+    else:
+        # Remote service
+        remote_services = manager.get_remote_service_names(hostname)
+        if not remote_services:
+            print_error(f"No services found on hostname '{hostname}'")
+            return hostname, []
+        
+        if service_part == "":
+            # hostname: format - return all services on that host
+            return hostname, remote_services
+        elif service_part == "all":
+            # hostname:all format - return all services on that host  
+            return hostname, remote_services
+        else:
+            # hostname:service_id or hostname:service_name format
+            try:
+                service_id = int(service_part)
+                if 1 <= service_id <= len(remote_services):
+                    return hostname, [remote_services[service_id - 1]]
+                else:
+                    print_error(f"Invalid service ID '{service_id}' for hostname '{hostname}' (valid range: 1-{len(remote_services)})")
+                    return hostname, []
+            except ValueError:
+                # Not a number, treat as service name
+                if service_part in remote_services:
+                    return hostname, [service_part]
+                else:
+                    print_error(f"Service '{service_part}' not found on hostname '{hostname}'")
+                    return hostname, []
 
 def resolve_service_id(manager: ServiceManager, service_id: str) -> Optional[str]:
     """
