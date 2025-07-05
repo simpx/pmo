@@ -267,7 +267,11 @@ class LogManager:
                     log_files.append((service, log_type, log_path, service_id))
                 else:
                     style = "stderr_service" if log_type == "stderr" else "stdout_service" 
-                    console.print(f"{Emojis.WARNING} No {log_type} log found for [{style}]{service}[/]", style="warning")
+                    # Use Text object to avoid Rich markup parsing in service name
+                    text = Text()
+                    text.append(f"{Emojis.WARNING} No {log_type} log found for ")
+                    text.append(service, style=style)
+                    console.print(text, style="warning")
                     
         if not log_files:
             print_warning("No log files found for specified services.")
@@ -296,7 +300,12 @@ class LogManager:
                     for line in last_lines:
                         timestamp, message = self._parse_log_line(line)
                         style = "stderr_service" if log_type == "stderr" else "stdout_service"
-                        console.print(f"{service_id} | [{style}]{service}[/] | {timestamp}: {message}")
+                        # Use Text object to avoid Rich markup parsing in message content
+                        text = Text()
+                        text.append(f"{service_id} | ")
+                        text.append(service, style=style)
+                        text.append(f" | {timestamp}: {message}")
+                        console.print(text)
             except Exception as e:
                 print_error(f"Error reading log file: {str(e)}")
     
@@ -333,7 +342,12 @@ class LogManager:
                         timestamp, message = self._parse_log_line(line)
                         style = "stderr_service" if log_type == "stderr" else "stdout_service"
                         service_id = service_ids[(service, log_type)]
-                        console.print(f"{service_id} | [{style}]{service}[/] | {timestamp}: {message}")
+                        # Use Text object to avoid Rich markup parsing in message content
+                        text = Text()
+                        text.append(f"{service_id} | ")
+                        text.append(service, style=style)
+                        text.append(f" | {timestamp}: {message}")
+                        console.print(text)
                 
                 if not has_new_data:
                     # Use a short sleep interval to be more responsive to new output
