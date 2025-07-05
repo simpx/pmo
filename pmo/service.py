@@ -413,7 +413,7 @@ class ServiceManager:
             return False
     
     def stop(self, service_name: str, timeout: int = 5) -> bool:
-        """Stop a specified service and all its child processes with aggressive cleanup."""
+        """Stop a specified service and all its child processes with progress feedback."""
         pid = self.get_service_pid(service_name)
         if not pid:
             logger.info(f"Service '{service_name}' is not running.")
@@ -422,10 +422,10 @@ class ServiceManager:
         try:
             # Get all processes in the process tree before attempting to kill
             process_tree_pids = self.get_process_tree(pid)
-            logger.debug(f"Process tree for service '{service_name}': {process_tree_pids}")
+            logger.info(f"Stopping service '{service_name}' with {len(process_tree_pids)} processes...")
             
-            # Phase 1: Graceful shutdown with SIGTERM
-            logger.debug("Phase 1: Attempting graceful shutdown with SIGTERM")
+            # Graceful shutdown with SIGTERM
+            console.print(f"[yellow]📤[/] Sending SIGTERM to {len(process_tree_pids)} processes...")
             
             # Try to kill the entire process group first
             try:
@@ -434,41 +434,34 @@ class ServiceManager:
             except (ProcessLookupError, PermissionError) as e:
                 logger.debug(f"Failed to kill process group: {e}")
             
-            # Also send SIGTERM to individual processes in case they're not in the same group
+            # Also send SIGTERM to individual processes
             for process_pid in process_tree_pids:
                 try:
                     os.kill(process_pid, signal.SIGTERM)
-                    logger.debug(f"Sent SIGTERM to individual process {process_pid}")
                 except (ProcessLookupError, PermissionError):
                     continue
             
-            # Wait for processes to terminate gracefully
+            # Wait for processes to terminate gracefully with progress
             for attempt in range(timeout):
-                remaining_pids = []
-                for process_pid in process_tree_pids:
-                    if self._is_process_running(process_pid):
-                        remaining_pids.append(process_pid)
+                remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
                 
                 if not remaining_pids:
-                    logger.debug("All processes terminated gracefully")
+                    console.print(f"[green]✓[/] All processes terminated gracefully")
                     break
                     
-                if attempt < timeout - 1:  # Don't sleep on the last iteration
+                console.print(f"[dim]Waiting for {len(remaining_pids)} processes to terminate... ({attempt + 1}/{timeout})[/]")
+                if attempt < timeout - 1:
                     time.sleep(1)
             
-            # Phase 2: Force kill with SIGKILL
-            remaining_pids = []
-            for process_pid in process_tree_pids:
-                if self._is_process_running(process_pid):
-                    remaining_pids.append(process_pid)
+            # Force kill with SIGKILL if needed
+            remaining_pids = [pid for pid in process_tree_pids if self._is_process_running(pid)]
             
             if remaining_pids:
-                logger.debug(f"Phase 2: Force killing remaining processes with SIGKILL: {remaining_pids}")
+                console.print(f"[red]💀[/] Force killing {len(remaining_pids)} remaining processes...")
                 
                 # Try to kill the process group with SIGKILL
                 try:
                     os.killpg(os.getpgid(pid), signal.SIGKILL)
-                    logger.debug(f"Sent SIGKILL to process group {os.getpgid(pid)}")
                 except (ProcessLookupError, PermissionError):
                     pass
                 
@@ -476,120 +469,85 @@ class ServiceManager:
                 for process_pid in remaining_pids:
                     try:
                         os.kill(process_pid, signal.SIGKILL)
-                        logger.debug(f"Sent SIGKILL to process {process_pid}")
                     except (ProcessLookupError, PermissionError):
                         continue
                 
                 # Wait for force kill to take effect
                 time.sleep(1)
-            
-            # Phase 3: Ultimate cleanup - scan for any remaining processes
-            final_remaining = []
-            for process_pid in process_tree_pids:
-                if self._is_process_running(process_pid):
-                    final_remaining.append(process_pid)
-            
-            if final_remaining:
-                logger.warning(f"Phase 3: Some processes still alive after SIGKILL: {final_remaining}")
                 
-                # Use psutil for more aggressive cleanup
-                for process_pid in final_remaining:
-                    try:
-                        proc = psutil.Process(process_pid)
-                        logger.debug(f"Attempting to terminate stubborn process {process_pid} ({proc.name()})")
-                        
-                        # Try psutil terminate first
-                        proc.terminate()
-                        
-                        # Wait a bit
+                # Final check
+                final_remaining = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+                
+                if final_remaining:
+                    console.print(f"[red]⚠[/] {len(final_remaining)} processes are stubborn, trying psutil...")
+                    
+                    # Use psutil for stubborn processes
+                    for process_pid in final_remaining:
                         try:
-                            proc.wait(timeout=2)
-                            logger.debug(f"Process {process_pid} terminated via psutil")
-                            continue
-                        except psutil.TimeoutExpired:
-                            pass
-                        
-                        # If still alive, try psutil kill
-                        if proc.is_running():
-                            logger.debug(f"Force killing process {process_pid} via psutil")
+                            proc = psutil.Process(process_pid)
                             proc.kill()
-                            
-                            # Final wait
-                            try:
-                                proc.wait(timeout=2)
-                                logger.debug(f"Process {process_pid} killed via psutil")
-                            except psutil.TimeoutExpired:
-                                logger.error(f"Process {process_pid} is extremely stubborn and refuses to die")
-                                
-                    except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                        # Process might have finally died or become a zombie
-                        continue
-                    except Exception as e:
-                        logger.error(f"Error trying to kill process {process_pid}: {e}")
+                            proc.wait(timeout=2)
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, psutil.TimeoutExpired):
+                            continue
+                        except Exception:
+                            continue
+                    
+                    # Ultimate final check
+                    time.sleep(1)
+                    absolutely_final = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+                    
+                    if absolutely_final:
+                        logger.error(f"Failed to kill {len(absolutely_final)} stubborn processes: {absolutely_final}")
+                        console.print(f"[red]✗[/] {len(absolutely_final)} processes could not be terminated")
+                    else:
+                        console.print(f"[green]✓[/] All processes terminated successfully")
+                else:
+                    console.print(f"[green]✓[/] All processes terminated successfully")
             
-            # Phase 4: Final verification and cleanup
-            absolutely_final_check = []
-            for process_pid in process_tree_pids:
-                if self._is_process_running(process_pid):
-                    absolutely_final_check.append(process_pid)
-            
-            if absolutely_final_check:
-                logger.error(f"CRITICAL: These processes refuse to die and may cause resource leaks: {absolutely_final_check}")
-                
-                # Log detailed information about stubborn processes
-                for process_pid in absolutely_final_check:
-                    try:
-                        proc = psutil.Process(process_pid)
-                        logger.error(f"Stubborn process {process_pid}: name={proc.name()}, "
-                                   f"status={proc.status()}, cmdline={' '.join(proc.cmdline())}")
-                    except:
-                        pass
-                
-                # This is a serious issue, but we'll continue with cleanup
-                # In production, you might want to alert administrators
-            
-            # Clean up PID file regardless of whether all processes died
+            # Clean up files
             pid_file = self.get_pid_file(service_name)
             if os.path.exists(pid_file):
                 os.remove(pid_file)
                 
-            # 清理启动时间记录
             if service_name in self.start_times:
                 del self.start_times[service_name]
             
-            # 删除启动时间文件
             start_time_file = self.pid_dir / f"{service_name}.time"
             if start_time_file.exists():
                 os.remove(start_time_file)
             
-            if absolutely_final_check:
-                logger.warning(f"Service '{service_name}' stopped with {len(absolutely_final_check)} stubborn processes remaining")
-                return False  # Indicate partial failure
+            # Check final status - only return False if processes are actually still running
+            final_check = [pid for pid in process_tree_pids if self._is_process_running(pid)]
+            
+            if final_check:
+                logger.warning(f"Service '{service_name}' stopped with {len(final_check)} processes remaining")
+                return False
             else:
                 logger.info(f"Service '{service_name}' stopped successfully")
                 return True
                 
         except ProcessLookupError:
             # Process already terminated
-            pid_file = self.get_pid_file(service_name)
-            if os.path.exists(pid_file):
-                os.remove(pid_file)
-            
-            # 清理启动时间记录
-            if service_name in self.start_times:
-                del self.start_times[service_name]
-            
-            # 删除启动时间文件
-            start_time_file = self.pid_dir / f"{service_name}.time"
-            if start_time_file.exists():
-                os.remove(start_time_file)
-                
+            self._cleanup_service_files(service_name)
             logger.info(f"Service '{service_name}' was not running")
             return True
             
         except Exception as e:
             logger.error(f"Failed to stop service '{service_name}': {str(e)}")
             return False
+    
+    def _cleanup_service_files(self, service_name: str):
+        """Clean up service-related files."""
+        pid_file = self.get_pid_file(service_name)
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+        
+        if service_name in self.start_times:
+            del self.start_times[service_name]
+        
+        start_time_file = self.pid_dir / f"{service_name}.time"
+        if start_time_file.exists():
+            os.remove(start_time_file)
     
     def restart(self, service_name: str) -> bool:
         """Restart a service."""
