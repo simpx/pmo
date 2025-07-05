@@ -524,6 +524,75 @@ class ServiceManager:
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             return [pid]
     
+    def get_process_tree_info(self, service_name: str) -> Dict[str, Any]:
+        """获取服务进程树的详细信息"""
+        pid = self.get_service_pid(service_name)
+        if not pid:
+            return {
+                "main_process": None,
+                "children": [],
+                "total_processes": 0,
+                "total_cpu": 0.0,
+                "total_memory": 0.0
+            }
+        
+        try:
+            main_process = psutil.Process(pid)
+            children = main_process.children(recursive=True)
+            
+            # 主进程信息
+            main_info = {
+                "pid": pid,
+                "name": main_process.name(),
+                "cmdline": " ".join(main_process.cmdline()),
+                "cpu_percent": main_process.cpu_percent(interval=0),
+                "memory_mb": main_process.memory_info().rss / (1024 * 1024),
+                "memory_percent": main_process.memory_percent(),
+                "status": main_process.status(),
+                "create_time": main_process.create_time()
+            }
+            
+            # 子进程信息
+            children_info = []
+            total_cpu = main_info["cpu_percent"]
+            total_memory = main_info["memory_mb"]
+            
+            for child in children:
+                try:
+                    child_info = {
+                        "pid": child.pid,
+                        "name": child.name(),
+                        "cmdline": " ".join(child.cmdline()),
+                        "cpu_percent": child.cpu_percent(interval=0),
+                        "memory_mb": child.memory_info().rss / (1024 * 1024),
+                        "memory_percent": child.memory_percent(),
+                        "status": child.status(),
+                        "create_time": child.create_time()
+                    }
+                    children_info.append(child_info)
+                    total_cpu += child_info["cpu_percent"]
+                    total_memory += child_info["memory_mb"]
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    # 子进程可能已经退出，跳过
+                    continue
+            
+            return {
+                "main_process": main_info,
+                "children": children_info,
+                "total_processes": 1 + len(children_info),
+                "total_cpu": total_cpu,
+                "total_memory": total_memory
+            }
+            
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            return {
+                "main_process": None,
+                "children": [],
+                "total_processes": 0,
+                "total_cpu": 0.0,
+                "total_memory": 0.0
+            }
+    
     def get_gpu_stats_for_process_tree(self, pid: int) -> Dict[str, Any]:
         """获取进程树中所有进程的GPU使用情况"""
         result = {

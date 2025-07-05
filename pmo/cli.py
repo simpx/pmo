@@ -84,6 +84,11 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     # LS command (replaces original PS command)
     ls_parser = subparsers.add_parser('ls', help='List services')
     
+    # Status command
+    status_parser = subparsers.add_parser('status', aliases=['st'], help=f'{Emojis.INFO} Show detailed service status with process tree')
+    status_parser.add_argument('service', nargs='*', default=['all'],
+                             help='Service names or IDs (multiple allowed) or "all" to show all services')
+    
     return parser
 
 def show_service_prompt(manager: ServiceManager, command: str) -> None:
@@ -321,6 +326,131 @@ def handle_flush(manager: ServiceManager, log_manager: LogManager, service_specs
     
     return True
 
+def handle_status(manager: ServiceManager, service_specs: List[str]) -> bool:
+    """Handle status command to show detailed service status with process tree"""
+    # Check if no services specified (should not happen due to default=['all'])
+    if not service_specs:
+        service_specs = ['all']
+    
+    # Resolve service names, handling possible IDs or 'all'
+    service_names = resolve_multiple_services(manager, service_specs)
+    
+    if not service_names:
+        print_warning("No valid services specified for status.")
+        return False
+    
+    # Display status for each service
+    for service_name in service_names:
+        print_service_status(manager, service_name)
+    
+    return True
+
+def print_service_status(manager: ServiceManager, service_name: str) -> None:
+    """Print detailed status for a single service"""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.columns import Columns
+    from datetime import datetime
+    
+    # Get service configuration
+    config = manager.services.get(service_name, {})
+    
+    # Get process tree info
+    tree_info = manager.get_process_tree_info(service_name)
+    
+    # Create main info table
+    info_table = Table(show_header=False, box=None, padding=(0, 1))
+    info_table.add_column("key", style="cyan")
+    info_table.add_column("value", style="white")
+    
+    # Basic service info
+    info_table.add_row("Service Name", service_name)
+    info_table.add_row("Status", "🟢 Running" if manager.is_running(service_name) else "🔴 Stopped")
+    info_table.add_row("Config Path", manager.config_path)
+    info_table.add_row("Command", config.get("cmd", "N/A"))
+    info_table.add_row("Working Dir", config.get("cwd", "N/A"))
+    
+    # Process info
+    if tree_info["main_process"]:
+        main_proc = tree_info["main_process"]
+        info_table.add_row("Main PID", str(main_proc["pid"]))
+        info_table.add_row("Process Name", main_proc["name"])
+        info_table.add_row("Total Processes", str(tree_info["total_processes"]))
+        
+        # Uptime
+        uptime_seconds = manager.get_uptime(service_name)
+        uptime_str = manager.format_uptime(uptime_seconds) if uptime_seconds else "N/A"
+        info_table.add_row("Uptime", uptime_str)
+        
+        # Resource usage
+        info_table.add_row("Total CPU", f"{tree_info['total_cpu']:.1f}%")
+        info_table.add_row("Total Memory", manager.format_memory(tree_info["total_memory"], None))
+        
+        # Start time
+        start_time = datetime.fromtimestamp(main_proc["create_time"])
+        info_table.add_row("Started At", start_time.strftime("%Y-%m-%d %H:%M:%S"))
+        
+        # Restart count
+        restart_count = manager.get_restarts_count(service_name)
+        info_table.add_row("Restarts", str(restart_count))
+        
+        # GPU info
+        stats = manager.get_process_stats(service_name)
+        if stats.get("gpu_memory"):
+            info_table.add_row("GPU Memory", stats["gpu_memory"])
+            info_table.add_row("GPU ID", stats.get("gpu_id", "N/A"))
+    else:
+        info_table.add_row("Main PID", "N/A")
+        info_table.add_row("Process Name", "N/A")
+        info_table.add_row("Total Processes", "0")
+        info_table.add_row("Uptime", "N/A")
+        info_table.add_row("Total CPU", "0%")
+        info_table.add_row("Total Memory", "0b")
+    
+    # Create process tree table
+    process_table = Table(show_header=True, header_style="header", box=None)
+    process_table.add_column("PID", justify="right", width=8)
+    process_table.add_column("Type", width=8)
+    process_table.add_column("Name", width=15)
+    process_table.add_column("CPU", justify="right", width=8)
+    process_table.add_column("Memory", justify="right", width=10)
+    process_table.add_column("Status", width=10)
+    process_table.add_column("Command", overflow="fold")
+    
+    if tree_info["main_process"]:
+        main_proc = tree_info["main_process"]
+        process_table.add_row(
+            str(main_proc["pid"]),
+            "main",
+            main_proc["name"],
+            f"{main_proc['cpu_percent']:.1f}%",
+            manager.format_memory(main_proc["memory_mb"], None),
+            main_proc["status"],
+            main_proc["cmdline"][:60] + "..." if len(main_proc["cmdline"]) > 60 else main_proc["cmdline"]
+        )
+        
+        # Add child processes
+        for child in tree_info["children"]:
+            process_table.add_row(
+                str(child["pid"]),
+                "child",
+                child["name"],
+                f"{child['cpu_percent']:.1f}%",
+                manager.format_memory(child["memory_mb"], None),
+                child["status"],
+                child["cmdline"][:60] + "..." if len(child["cmdline"]) > 60 else child["cmdline"]
+            )
+    else:
+        process_table.add_row("N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "Service not running")
+    
+    # Display in panels
+    info_panel = Panel(info_table, title=f"Service Info: {service_name}", border_style="blue")
+    process_panel = Panel(process_table, title="Process Tree", border_style="green")
+    
+    console.print(info_panel)
+    console.print(process_panel)
+    console.print()  # Add spacing between services
+
 def handle_list(manager: ServiceManager) -> bool:
     """Handle list services command"""
     service_names = manager.get_service_names()
@@ -479,6 +609,8 @@ def main():
             success = handle_log(service_manager, log_manager, args)
         elif args.command == 'ls':
             success = handle_list(service_manager)
+        elif args.command == 'status' or args.command == 'st':
+            success = handle_status(service_manager, args.service)
         elif args.command == 'flush':
             success = handle_flush(service_manager, log_manager, args.service)
         else:
