@@ -415,7 +415,7 @@ def print_service_status(manager: ServiceManager, service_name: str) -> None:
     process_table.add_column("CPU", justify="right", width=8)
     process_table.add_column("Memory", justify="right", width=10)
     process_table.add_column("Status", width=10)
-    process_table.add_column("Command", overflow="fold")
+    process_table.add_column("Command", overflow="fold", no_wrap=False)
     
     if tree_info["main_process"]:
         main_proc = tree_info["main_process"]
@@ -426,7 +426,7 @@ def print_service_status(manager: ServiceManager, service_name: str) -> None:
             f"{main_proc['cpu_percent']:.1f}%",
             manager.format_memory(main_proc["memory_mb"], None),
             main_proc["status"],
-            main_proc["cmdline"][:60] + "..." if len(main_proc["cmdline"]) > 60 else main_proc["cmdline"]
+            main_proc["cmdline"]
         )
         
         # Add child processes
@@ -438,7 +438,7 @@ def print_service_status(manager: ServiceManager, service_name: str) -> None:
                 f"{child['cpu_percent']:.1f}%",
                 manager.format_memory(child["memory_mb"], None),
                 child["status"],
-                child["cmdline"][:60] + "..." if len(child["cmdline"]) > 60 else child["cmdline"]
+                child["cmdline"]
             )
     else:
         process_table.add_row("N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "Service not running")
