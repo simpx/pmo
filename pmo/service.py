@@ -446,7 +446,7 @@ class ServiceManager:
             logger.error(f"Failed to start service '{service_name}': {str(e)}")
             return False
     
-    def stop(self, service_name: str, timeout: int = 15) -> bool:
+    def stop(self, service_name: str, timeout: int = 5) -> bool:
         """Stop a specified service and all its child processes with progress feedback."""
         pid = self.get_service_pid(service_name)
         if not pid:
@@ -476,8 +476,6 @@ class ServiceManager:
                     continue
             
             # Wait for processes to terminate gracefully with progress
-            defunct_timeout = timeout * 2  # Give more time for defunct processes
-            
             for attempt in range(timeout):
                 active_count, defunct_count = self._count_active_processes(process_tree_pids)
                 
@@ -485,24 +483,32 @@ class ServiceManager:
                     console.print(f"[green]✓[/] All processes terminated gracefully")
                     break
                 elif active_count == 0 and defunct_count > 0:
-                    # Only defunct processes remain, give them more time
-                    if attempt < timeout - 1:
-                        console.print(f"[yellow]⏳[/] Waiting for {defunct_count} defunct processes to clean up... ({attempt + 1}/{timeout})")
-                        time.sleep(2)  # Longer wait for defunct processes
-                    else:
-                        console.print(f"[blue]ℹ[/] {defunct_count} defunct processes detected, extending wait time...")
-                        # Extended wait for defunct processes
+                    # Only defunct processes remain, handle them separately
+                    console.print(f"[blue]ℹ[/] {defunct_count} defunct/zombie processes detected")
+                    console.print(f"[blue]ℹ[/] These processes MAY cleaning up GPU/system resources...")
+                    console.print(f"[dim]You can press Ctrl+C to exit PMO (processes will continue cleaning up)[/]")
+                    
+                    # Extended wait for defunct processes (30 seconds)
+                    defunct_timeout = 30
+                    try:
                         for extra_attempt in range(defunct_timeout):
                             active_count, defunct_count = self._count_active_processes(process_tree_pids)
                             if defunct_count == 0:
                                 console.print(f"[green]✓[/] All defunct processes cleaned up")
                                 break
-                            console.print(f"[dim]Waiting for {defunct_count} defunct processes... ({extra_attempt + 1}/{defunct_timeout})[/]")
-                            if extra_attempt < defunct_timeout - 1:
-                                time.sleep(2)
-                        break
+                            
+                            elapsed = extra_attempt + 1
+                            remaining = defunct_timeout - elapsed
+                            console.print(f"[dim]Waiting for {defunct_count} defunct processes... {elapsed}s elapsed, {remaining}s remaining[/]")
+                            time.sleep(1)
+                    except KeyboardInterrupt:
+                        console.print(f"[yellow]⚠[/] User interrupted. {defunct_count} defunct processes will continue cleaning up in background.")
+                        return True
+                    break
                 else:
-                    console.print(f"[dim]Waiting for {active_count} active processes to terminate... ({attempt + 1}/{timeout})[/]")
+                    elapsed = attempt + 1
+                    remaining = timeout - elapsed
+                    console.print(f"[dim]Waiting for {active_count} active processes... {elapsed}s elapsed, {remaining}s remaining[/]")
                     if attempt < timeout - 1:
                         time.sleep(1)
             
