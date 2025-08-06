@@ -272,7 +272,8 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     if local_services:
         all_services = manager.get_service_names()
         service_id_map = {name: str(idx + 1) for idx, name in enumerate(all_services)}
-        log_manager.tail_logs(local_services, follow=follow, lines=lines, service_id_map=service_id_map)
+        # 传递服务配置，以便支持合并日志
+        log_manager.tail_logs(local_services, follow=follow, lines=lines, service_id_map=service_id_map, service_configs=manager.services)
     
     # Handle remote services
     for hostname, services in remote_services.items():
@@ -281,6 +282,7 @@ def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
             remote_log_dir = manager.get_remote_log_dir(hostname)
             remote_log_manager = LogManager(remote_log_dir)
             service_id_map = manager.get_remote_service_id_map(hostname)
+            # 远程服务暂时不传递配置，因为无法获取远程配置
             remote_log_manager.tail_logs(services, follow=follow, lines=lines, service_id_map=service_id_map, hostname=hostname)
     
     return True

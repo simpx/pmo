@@ -139,12 +139,37 @@ class LogManager:
         self.log_dir = log_dir
         self.default_tail_lines = 15  # Default to showing last 15 lines of logs
         
-    def get_log_files(self, service_name: str) -> Dict[str, Path]:
-        """Get service's stdout and stderr log file paths"""
-        return {
-            'stdout': self.log_dir / f"{service_name}-out.log",
-            'stderr': self.log_dir / f"{service_name}-error.log"
-        }
+    def get_log_files(self, service_name: str, merge_logs: bool = False) -> Dict[str, Path]:
+        """Get service's stdout and stderr log file paths
+        
+        Args:
+            service_name: 服务名称
+            merge_logs: 是否合并日志。如果为True，stdout和stderr都指向同一个文件
+        """
+        if merge_logs:
+            # 合并模式：stdout和stderr都使用同一个文件
+            merged_log_path = self.log_dir / f"{service_name}.log"
+            return {
+                'stdout': merged_log_path,
+                'stderr': merged_log_path
+            }
+        else:
+            # 分离模式：使用原来的文件命名方式
+            return {
+                'stdout': self.log_dir / f"{service_name}-out.log",
+                'stderr': self.log_dir / f"{service_name}-error.log"
+            }
+    
+    def get_all_possible_log_files(self, service_name: str) -> List[Path]:
+        """获取服务可能的所有日志文件路径（包括合并和分离模式）
+        
+        用于flush命令，确保删除所有可能的日志文件
+        """
+        return [
+            self.log_dir / f"{service_name}.log",          # 合并日志文件
+            self.log_dir / f"{service_name}-out.log",      # 分离模式stdout
+            self.log_dir / f"{service_name}-error.log"     # 分离模式stderr
+        ]
     
     def flush_logs(self, service_names: Optional[List[str]] = None, running_services: Optional[List[str]] = None) -> Dict[str, int]:
         """
@@ -162,8 +187,8 @@ class LogManager:
         
         # 如果没有指定服务，处理.pmo/logs目录下所有日志文件
         if not service_names:
-            # 获取所有日志文件
-            log_files = list(self.log_dir.glob('*-out.log')) + list(self.log_dir.glob('*-error.log'))
+            # 获取所有日志文件（包括合并和分离模式）
+            log_files = list(self.log_dir.glob('*.log')) + list(self.log_dir.glob('*-out.log')) + list(self.log_dir.glob('*-error.log'))
             
             deleted_count = 0
             cleared_count = 0
@@ -171,7 +196,17 @@ class LogManager:
             for log_file in log_files:
                 # 从文件名中提取服务名称
                 file_name = log_file.name
-                service_name = file_name.replace('-out.log', '').replace('-error.log', '')
+                if file_name.endswith('.log') and not file_name.endswith('-out.log') and not file_name.endswith('-error.log'):
+                    # 合并日志文件：service_name.log
+                    service_name = file_name[:-4]  # 去掉 .log
+                elif file_name.endswith('-out.log'):
+                    # stdout文件：service_name-out.log
+                    service_name = file_name[:-8]  # 去掉 -out.log
+                elif file_name.endswith('-error.log'):
+                    # stderr文件：service_name-error.log
+                    service_name = file_name[:-10]  # 去掉 -error.log
+                else:
+                    continue  # 跳过不认识的文件
                 
                 try:
                     # 如果服务正在运行，清空文件内容但不删除文件
@@ -194,11 +229,12 @@ class LogManager:
                 
         # 对每个指定的服务处理其日志
         for service_name in service_names:
-            log_files = self.get_log_files(service_name)
+            # 获取所有可能的日志文件
+            possible_log_files = self.get_all_possible_log_files(service_name)
             deleted = 0
             cleared = 0
             
-            for log_type, log_path in log_files.items():
+            for log_path in possible_log_files:
                 if log_path.exists():
                     try:
                         # 如果服务正在运行，清空文件内容但不删除文件
@@ -213,7 +249,7 @@ class LogManager:
                             log_path.unlink()
                             deleted += 1
                     except (IOError, PermissionError) as e:
-                        print_error(f"Failed to process {log_type} log for '{service_name}': {str(e)}")
+                        print_error(f"Failed to process log file {log_path}: {str(e)}")
             
             result[service_name] = {"deleted": deleted, "cleared": cleared}
             
@@ -235,7 +271,7 @@ class LogManager:
         
         return timestamp, content
     
-    def tail_logs(self, service_names: List[str], follow: bool = True, lines: Optional[int] = None, service_id_map: Optional[Dict[str, str]] = None, hostname: Optional[str] = None):
+    def tail_logs(self, service_names: List[str], follow: bool = True, lines: Optional[int] = None, service_id_map: Optional[Dict[str, str]] = None, hostname: Optional[str] = None, service_configs: Optional[Dict[str, Dict]] = None):
         """
         Display service logs
         
@@ -245,6 +281,7 @@ class LogManager:
             lines: Number of lines to show initially, defaults to self.default_tail_lines
             service_id_map: Dictionary mapping service names to their IDs (from pmo ls)
             hostname: Hostname prefix to display in log output
+            service_configs: Dictionary containing service configurations for merge_logs option
         """
         if lines is None:
             lines = self.default_tail_lines
@@ -257,24 +294,46 @@ class LogManager:
         if service_id_map is None:
             service_id_map = {name: str(i) for i, name in enumerate(service_names)}
             
+        # If no service_configs provided, create empty one (fallback to separate logs)
+        if service_configs is None:
+            service_configs = {}
+            
         # Check if log files exist
         log_files = []
         for service in service_names:
-            service_logs = self.get_log_files(service)
-            for log_type, log_path in service_logs.items():
+            # 检查是否启用了日志合并
+            service_config = service_configs.get(service, {})
+            merge_logs = service_config.get('merge_logs', False)
+            
+            service_logs = self.get_log_files(service, merge_logs)
+            service_id = service_id_map.get(service, str(service_names.index(service)))
+            
+            if merge_logs:
+                # 合并日志模式：只检查一个文件
+                log_path = service_logs['stdout']  # stdout和stderr指向同一个文件
                 if log_path.exists():
-                    # Use ID from service_id_map if available, otherwise use fallback
-                    service_id = service_id_map.get(service, str(service_names.index(service)))
-                    log_files.append((service, log_type, log_path, service_id))
+                    log_files.append((service, 'merged', log_path, service_id))
                 else:
-                    style = "stderr_service" if log_type == "stderr" else "stdout_service" 
-                    # Use Text object to avoid Rich markup parsing in service name
+                    style = "stdout_service"
                     text = Text()
-                    text.append(f"{Emojis.WARNING} No {log_type} log found for ")
+                    text.append(f"{Emojis.WARNING} No merged log found for ")
                     if hostname:
                         text.append(f"{hostname}:")
                     text.append(service, style=style)
                     console.print(text, style="warning")
+            else:
+                # 分离日志模式：检查stdout和stderr文件
+                for log_type, log_path in service_logs.items():
+                    if log_path.exists():
+                        log_files.append((service, log_type, log_path, service_id))
+                    else:
+                        style = "stderr_service" if log_type == "stderr" else "stdout_service" 
+                        text = Text()
+                        text.append(f"{Emojis.WARNING} No {log_type} log found for ")
+                        if hostname:
+                            text.append(f"{hostname}:")
+                        text.append(service, style=style)
+                        console.print(text, style="warning")
                     
         if not log_files:
             print_warning("No log files found for specified services.")
@@ -302,7 +361,11 @@ class LogManager:
                     # Print each line with service ID, PM2 format
                     for line in last_lines:
                         timestamp, message = self._parse_log_line(line)
-                        style = "stderr_service" if log_type == "stderr" else "stdout_service"
+                        # 根据日志类型选择样式
+                        if log_type == "merged":
+                            style = "stdout_service"  # 合并日志使用stdout样式
+                        else:
+                            style = "stderr_service" if log_type == "stderr" else "stdout_service"
                         # Use Text object to avoid Rich markup parsing in message content
                         text = Text()
                         text.append(f"{service_id} | ")
@@ -345,7 +408,11 @@ class LogManager:
                     if line:
                         has_new_data = True
                         timestamp, message = self._parse_log_line(line)
-                        style = "stderr_service" if log_type == "stderr" else "stdout_service"
+                        # 根据日志类型选择样式
+                        if log_type == "merged":
+                            style = "stdout_service"  # 合并日志使用stdout样式
+                        else:
+                            style = "stderr_service" if log_type == "stderr" else "stdout_service"
                         service_id = service_ids[(service, log_type)]
                         # Use Text object to avoid Rich markup parsing in message content
                         text = Text()

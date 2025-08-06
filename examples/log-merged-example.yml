@@ -1,0 +1,22 @@
+# 日志合并配置示例
+# 演示如何配置应用级别的日志合并
+
+# 默认配置：不合并日志（stdout和stderr分开）
+web-server:
+  cmd: python -m http.server 8080
+  # merge_logs: false  # 默认值，可以省略
+
+# 启用日志合并：stdout和stderr输出到同一个文件
+app-with-merged-logs:
+  cmd: python -c "import sys, time; [print(f'stdout line {i}') or print(f'stderr line {i}', file=sys.stderr) or time.sleep(1) for i in range(10)]"
+  merge_logs: true  # 启用日志合并
+
+# 继承配置也支持日志合并
+base-service:
+  cmd: echo "Base service"
+  merge_logs: true
+
+inherited-service:
+  extends: base-service
+  cmd: echo "Inherited service"
+  # 继承了 merge_logs: true 配置

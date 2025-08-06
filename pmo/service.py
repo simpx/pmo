@@ -404,16 +404,34 @@ class ServiceManager:
         if env:
             env_copy.update(env)
         
+        # 检查是否启用日志合并
+        merge_logs = config.get('merge_logs', False)
+        
         # Prepare log files
-        stdout_log = self.log_dir / f"{service_name}-out.log"
-        stderr_log = self.log_dir / f"{service_name}-error.log"
+        if merge_logs:
+            # 合并模式：stdout和stderr都写入同一个文件
+            merged_log = self.log_dir / f"{service_name}.log"
+            stdout_log = merged_log
+            stderr_log = merged_log
+        else:
+            # 分离模式：使用原来的文件命名方式
+            stdout_log = self.log_dir / f"{service_name}-out.log"
+            stderr_log = self.log_dir / f"{service_name}-error.log"
+        
+        # Debug information
+        logger.debug(f"Service '{service_name}': merge_logs={merge_logs}, log_dir={self.log_dir}, stdout_log={stdout_log}, stderr_log={stderr_log}")
         
         try:
             with open(stdout_log, 'a') as out, open(stderr_log, 'a') as err:
                 # Add timestamp to logs
                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                out.write(f"\n--- Starting service '{service_name}' at {timestamp} ---\n")
-                err.write(f"\n--- Starting service '{service_name}' at {timestamp} ---\n")
+                if merge_logs:
+                    # 合并模式：只写一次启动信息
+                    out.write(f"\n--- Starting service '{service_name}' at {timestamp} (merged logs) ---\n")
+                else:
+                    # 分离模式：分别写入启动信息
+                    out.write(f"\n--- Starting service '{service_name}' at {timestamp} ---\n")
+                    err.write(f"\n--- Starting service '{service_name}' at {timestamp} ---\n")
                 
                 # Start the process
                 process = subprocess.Popen(
