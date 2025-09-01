@@ -298,13 +298,13 @@ class TestCLIInterface:
             args.lines = 20
             
             # 设置服务解析行为
-            with patch('pmo.cli.resolve_multiple_services', 
-                       return_value=["service1"]) as mock_resolve:
+            with patch('pmo.cli.resolve_remote_service_spec',
+                       return_value=(None, ["service1"])) as mock_resolve:
                 # 执行日志命令
                 result = handle_log(mock_manager, mock_log_manager, args)
-                
+
                 # 验证服务解析被正确调用
-                mock_resolve.assert_called_once_with(mock_manager, ["service1"])
+                mock_resolve.assert_called_once_with(mock_manager, "service1")
                 
                 # 验证日志查看方法被调用
                 # 使用灵活断言，只检查关心的参数
@@ -320,11 +320,11 @@ class TestCLIInterface:
             # 测试不跟随模式
             args.no_follow = True
             mock_log_manager.tail_logs.reset_mock()
-            with patch('pmo.cli.resolve_multiple_services', 
-                       return_value=["service1"]) as mock_resolve:
+            with patch('pmo.cli.resolve_remote_service_spec',
+                       return_value=(None, ["service1"])) as mock_resolve:
                 # 执行日志命令
                 result = handle_log(mock_manager, mock_log_manager, args)
-                
+
                 # 验证日志查看方法被调用且follow=False
                 # 同样使用灵活断言方式
                 mock_log_manager.tail_logs.assert_called_once()
@@ -356,13 +356,16 @@ class TestCLIInterface:
             }
             
             # 设置服务解析行为
-            with patch('pmo.cli.resolve_multiple_services', 
-                       return_value=["service1", "service2"]) as mock_resolve:
+            with patch('pmo.cli.resolve_remote_service_spec',
+                       side_effect=[(None, ["service1"]), (None, ["service2"])]) as mock_resolve:
                 # 执行刷新命令
                 result = handle_flush(mock_manager, mock_log_manager, ["service1", "service2"])
-                
+
                 # 验证服务解析被正确调用
-                mock_resolve.assert_called_once_with(mock_manager, ["service1", "service2"])
+                assert mock_resolve.call_args_list == [
+                    call(mock_manager, "service1"),
+                    call(mock_manager, "service2"),
+                ]
                 
                 # 验证flush_logs方法被调用
                 mock_log_manager.flush_logs.assert_called_once_with(
