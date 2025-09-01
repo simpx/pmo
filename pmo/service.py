@@ -340,6 +340,26 @@ class ServiceManager:
         # 使用mimetypes.guess_type检测文件类型
         mime_type, _ = mimetypes.guess_type(script_path)
         return mime_type == 'text/x-python'
+
+    def _rotate_log_file(self, log_path: Path, max_files: int = 30):
+        """Rotate log files to mimic logrotate style."""
+        if not log_path.exists():
+            return
+
+        # Remove the oldest file if exceeding max_files
+        oldest = log_path.with_name(log_path.name + f".{max_files}")
+        if oldest.exists():
+            oldest.unlink()
+
+        # Shift existing rotated files
+        for i in range(max_files - 1, 0, -1):
+            src = log_path.with_name(log_path.name + f".{i}")
+            if src.exists():
+                dest = log_path.with_name(log_path.name + f".{i + 1}")
+                src.rename(dest)
+
+        # Rotate current log file
+        log_path.rename(log_path.with_name(log_path.name + ".1"))
         
     def start(self, service_name: str, dry_run: bool = False) -> bool:
         """
@@ -417,7 +437,11 @@ class ServiceManager:
             # 分离模式：使用原来的文件命名方式
             stdout_log = self.log_dir / f"{service_name}-out.log"
             stderr_log = self.log_dir / f"{service_name}-error.log"
-        
+
+        # Rotate logs to start with a fresh file
+        for log_file in {stdout_log, stderr_log}:
+            self._rotate_log_file(log_file)
+
         # Debug information
         logger.debug(f"Service '{service_name}': merge_logs={merge_logs}, log_dir={self.log_dir}, stdout_log={stdout_log}, stderr_log={stderr_log}")
         
