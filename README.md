@@ -7,6 +7,7 @@ A lightweight process manager inspired by PM2, but designed primarily for develo
 - `start`, `stop`, and `restart` services, similar to PM2
 - Simple YAML configuration
 - Real-time logs with highlight
+- Automatic log rotation per run (keeps up to 30 log files)
 - Environment variable support
 - Automatic `.env` file loading
 - Multi-machine support with hostname-specific directories (for shared NAS environments)

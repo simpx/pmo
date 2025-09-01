@@ -161,15 +161,15 @@ class LogManager:
             }
     
     def get_all_possible_log_files(self, service_name: str) -> List[Path]:
-        """获取服务可能的所有日志文件路径（包括合并和分离模式）
-        
+        """获取服务可能的所有日志文件路径（包括合并和分离模式及其轮转文件）
+
         用于flush命令，确保删除所有可能的日志文件
         """
-        return [
-            self.log_dir / f"{service_name}.log",          # 合并日志文件
-            self.log_dir / f"{service_name}-out.log",      # 分离模式stdout
-            self.log_dir / f"{service_name}-error.log"     # 分离模式stderr
-        ]
+        files: List[Path] = []
+        files.extend(self.log_dir.glob(f"{service_name}.log*"))
+        files.extend(self.log_dir.glob(f"{service_name}-out.log*"))
+        files.extend(self.log_dir.glob(f"{service_name}-error.log*"))
+        return files
     
     def flush_logs(self, service_names: Optional[List[str]] = None, running_services: Optional[List[str]] = None) -> Dict[str, int]:
         """
@@ -187,42 +187,37 @@ class LogManager:
         
         # 如果没有指定服务，处理.pmo/logs目录下所有日志文件
         if not service_names:
-            # 获取所有日志文件（包括合并和分离模式）
-            log_files = list(self.log_dir.glob('*.log')) + list(self.log_dir.glob('*-out.log')) + list(self.log_dir.glob('*-error.log'))
-            
+            # 获取所有日志文件（包括轮转文件）
+            log_files = list(self.log_dir.glob('*.log*'))
+
             deleted_count = 0
             cleared_count = 0
-            
+
             for log_file in log_files:
-                # 从文件名中提取服务名称
                 file_name = log_file.name
-                if file_name.endswith('.log') and not file_name.endswith('-out.log') and not file_name.endswith('-error.log'):
-                    # 合并日志文件：service_name.log
-                    service_name = file_name[:-4]  # 去掉 .log
-                elif file_name.endswith('-out.log'):
-                    # stdout文件：service_name-out.log
-                    service_name = file_name[:-8]  # 去掉 -out.log
-                elif file_name.endswith('-error.log'):
-                    # stderr文件：service_name-error.log
-                    service_name = file_name[:-10]  # 去掉 -error.log
+
+                # 提取服务名称
+                if '-out.log' in file_name:
+                    service_name = file_name.split('-out.log')[0]
+                elif '-error.log' in file_name:
+                    service_name = file_name.split('-error.log')[0]
                 else:
-                    continue  # 跳过不认识的文件
-                
+                    service_name = file_name.split('.log')[0]
+
+                is_rotated = bool(re.search(r'\.log\.\d+$', file_name))
+
                 try:
-                    # 如果服务正在运行，清空文件内容但不删除文件
-                    if service_name in running_services:
-                        # 清空文件内容
+                    if service_name in running_services and not is_rotated:
                         with open(log_file, 'w') as f:
                             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                             f.write(f"--- Log flushed at {timestamp} ---\n")
                         cleared_count += 1
                     else:
-                        # 服务未运行，直接删除文件
                         log_file.unlink()
                         deleted_count += 1
                 except (IOError, PermissionError) as e:
                     print_error(f"Failed to process log file {log_file}: {str(e)}")
-            
+
             result["deleted"] = deleted_count
             result["cleared"] = cleared_count
             return result
@@ -236,16 +231,14 @@ class LogManager:
             
             for log_path in possible_log_files:
                 if log_path.exists():
+                    is_rotated = bool(re.search(r'\.log\.\d+$', log_path.name))
                     try:
-                        # 如果服务正在运行，清空文件内容但不删除文件
-                        if service_name in running_services:
-                            # 清空文件内容
+                        if service_name in running_services and not is_rotated:
                             with open(log_path, 'w') as f:
                                 timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
                                 f.write(f"--- Log flushed at {timestamp} ---\n")
                             cleared += 1
                         else:
-                            # 服务未运行，直接删除文件
                             log_path.unlink()
                             deleted += 1
                     except (IOError, PermissionError) as e:
