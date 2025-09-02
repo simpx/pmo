@@ -8,12 +8,16 @@ These instructions apply to the entire repository.
 - Prefer explicit behavior and minimal public APIs.
 - This project is a development-time helper, **not** a production-ready tool.
 - Optimize for developer experience and iteration speed rather than runtime performance.
+- Keep modules small and focused; avoid shared mutable state.
+- Provide clear error messages and fail fast when assumptions are violated.
 
 ## Code style
 - Target Python 3.10 or later.
 - Follow [PEP 8](https://peps.python.org/pep-0008/) conventions.
 - Use four spaces for indentation and double quotes for strings.
 - Include type hints and docstrings for public functions and classes.
+- Favor f-strings for formatting and keep lines under 100 characters.
+- Avoid wildcard imports; group imports by standard library, third-party, and local modules.
 
 ## Dependency management
 - Use the [`uv`](https://github.com/astral-sh/uv) tool to manage dependencies.
@@ -27,6 +31,7 @@ These instructions apply to the entire repository.
   ```bash
   uv run pytest
   ```
+- Add or update tests for any new features or bug fixes.
 - When packaging‑related files are changed, ensure the project builds:
   ```bash
   uv build
@@ -34,7 +39,10 @@ These instructions apply to the entire repository.
 
 ## Documentation
 - Update `README.md` or files in `docs/` when behavior or interfaces change.
+- Ensure code examples remain accurate and executable.
 
 ## Commit guidelines
-- Use descriptive commit messages that explain the change.
+- Use descriptive, present-tense commit messages that explain the change.
+- Follow a `type: summary` format (for example, `feat: add feature` or `docs: update readme`).
+- Keep commits focused; avoid bundling unrelated changes.
 
