@@ -11,6 +11,7 @@ A lightweight process manager inspired by PM2, but designed primarily for develo
 - Environment variable support
 - Automatic `.env` file loading
 - Multi-machine support with hostname-specific directories (for shared NAS environments)
+- Service configuration inheritance via `extends`
 
 ## Installation
 
@@ -47,7 +48,9 @@ DEBUG=true
 3. Start your services:
 
 ```bash
-pmo start
+pmo start all
+# or start specific services
+pmo start web-server api-server
 ```
 
 4. List your services:
@@ -74,10 +77,11 @@ Output:
 pmo start   [all | service-name | service-id]
 pmo stop    [all | service-name | service-id]
 pmo restart [all | service-name | service-id]
-pmo log     [all | service-name | service-id]
+pmo logs    [all | service-name | service-id]
 pmo flush   [all | service-name | service-id]
 pmo dry-run [all | service-name | service-id]
 pmo ls
+pmo status  [all | service-name | service-id]
 
 ```
 
@@ -94,6 +98,25 @@ The `pmo.yml` file supports two formats:
      env:
        KEY: value
    ```
+
+### Extending Services
+
+Services can reuse definitions with `extends`:
+
+```yaml
+base:
+  cmd: python app.py
+  env:
+    DEBUG: true
+
+worker:
+  extends: base
+  cmd: python worker.py
+  env:
+    WORKER: yes
+```
+
+Environment variables are merged recursively.
 
 PMO manages runtime data in the `.pmo` directory with logs and PID files.
 
