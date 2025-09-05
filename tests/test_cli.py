@@ -294,7 +294,7 @@ class TestCLIInterface:
             # 创建模拟参数
             args = MagicMock()
             args.service = ["service1"]
-            args.no_follow = False
+            args.follow = True
             args.lines = 20
             
             # 设置服务解析行为
@@ -318,7 +318,7 @@ class TestCLIInterface:
                 assert result is True
                 
             # 测试不跟随模式
-            args.no_follow = True
+            args.follow = False
             mock_log_manager.tail_logs.reset_mock()
             with patch('pmo.cli.resolve_remote_service_spec',
                        return_value=(None, ["service1"])) as mock_resolve:
