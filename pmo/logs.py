@@ -248,21 +248,6 @@ class LogManager:
             
         return result
     
-    def _parse_log_line(self, line: str) -> Tuple[str, str]:
-        """Parse log line, extract timestamp and content"""
-        timestamp = ""
-        content = line.rstrip()
-        
-        # Try to extract timestamp
-        timestamp_match = re.search(r'(\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2})', line)
-        if timestamp_match:
-            timestamp = timestamp_match.group(1)
-            # Remove timestamp part from line
-            content = line.replace(timestamp, "", 1).lstrip().rstrip()
-        else:
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        return timestamp, content
     
     def tail_logs(self, service_names: List[str], follow: bool = True, lines: Optional[int] = None, service_id_map: Optional[Dict[str, str]] = None, hostname: Optional[str] = None, service_configs: Optional[Dict[str, Dict]] = None):
         """
@@ -353,7 +338,7 @@ class LogManager:
                     
                     # Print each line with service ID, PM2 format
                     for line in last_lines:
-                        timestamp, message = self._parse_log_line(line)
+                        message = line.rstrip()
                         # 根据日志类型选择样式
                         if log_type == "merged":
                             style = "stdout_service"  # 合并日志使用stdout样式
@@ -365,7 +350,7 @@ class LogManager:
                         if hostname:
                             text.append(f"{hostname}:")
                         text.append(service, style=style)
-                        text.append(f" | {timestamp}: {message}")
+                        text.append(f" | {message}")
                         console.print(text)
             except Exception as e:
                 print_error(f"Error reading log file: {str(e)}")
@@ -400,7 +385,7 @@ class LogManager:
                     line = f.readline()
                     if line:
                         has_new_data = True
-                        timestamp, message = self._parse_log_line(line)
+                        message = line.rstrip()
                         # 根据日志类型选择样式
                         if log_type == "merged":
                             style = "stdout_service"  # 合并日志使用stdout样式
@@ -413,7 +398,7 @@ class LogManager:
                         if hostname:
                             text.append(f"{hostname}:")
                         text.append(service, style=style)
-                        text.append(f" | {timestamp}: {message}")
+                        text.append(f" | {message}")
                         console.print(text)
                 
                 if not has_new_data:
