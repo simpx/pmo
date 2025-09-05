@@ -78,8 +78,6 @@ Tests are organized in the `tests/` directory:
 | Test ID | Description | Mock/Setup | Expected Result |
 |---------|-------------|-----------|----------------|
 | UT-LOG-001 | Get log file paths | - | Correct stdout and stderr paths |
-| UT-LOG-002 | Parse log line with timestamp | Sample log lines | Extracted timestamp and content |
-| UT-LOG-003 | Parse log line without timestamp | Sample log lines | Default timestamp added, content preserved |
 | UT-LOG-004 | Flush logs for running service | Mock file operations | Files cleared but not deleted |
 | UT-LOG-005 | Flush logs for stopped service | Mock file operations | Log files deleted |
 | UT-LOG-006 | Display recent logs | Mock file read | Correct number of lines displayed |
@@ -87,7 +85,6 @@ Tests are organized in the `tests/` directory:
 | UT-LOG-008 | Handle missing log files | Mock non-existent files | Warning message, continue with available logs |
 | UT-LOG-009 | Handle multi-line log entries | Log with multi-line entries | Proper parsing and display of multi-line logs |
 | UT-LOG-010 | Log large file behavior | Mock large log file | Efficient handling without memory issues |
-| UT-LOG-011 | Parse various timestamp formats | Logs with different formats | All timestamp formats correctly parsed |
 | UT-LOG-012 | Color output formatting | Mock console output | Correct styling applied to different log types |
 
 ### 2.3 CLI Interface Tests

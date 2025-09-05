@@ -2,14 +2,11 @@
 测试日志管理功能。
 """
 import pytest
-import os
 import time
-import re
-from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch, mock_open, MagicMock, call, ANY
+from unittest.mock import patch, MagicMock, call
 
-from pmo.logs import LogManager, console, print_service_table, print_warning
+from pmo.logs import LogManager, print_service_table, print_warning
 
 class TestLogManager:
     """测试日志管理功能 (UT-LOG-001 - UT-LOG-012)"""
@@ -26,36 +23,6 @@ class TestLogManager:
         # 验证路径正确
         assert log_paths['stdout'] == log_dir / 'test-service-out.log'
         assert log_paths['stderr'] == log_dir / 'test-service-error.log'
-    
-    def test_parse_log_line_with_timestamp(self, temp_dir):
-        """UT-LOG-002: 解析带有时间戳的日志行"""
-        log_dir = Path(temp_dir) / '.pmo' / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        manager = LogManager(log_dir)
-        
-        # 测试解析带有时间戳的日志行
-        line = "2023-04-21 12:34:56 This is a log message"
-        timestamp, content = manager._parse_log_line(line)
-        
-        # 验证时间戳和内容正确分离
-        assert timestamp == "2023-04-21 12:34:56"
-        assert content == "This is a log message"
-    
-    def test_parse_log_line_without_timestamp(self, temp_dir):
-        """UT-LOG-003: 解析没有时间戳的日志行"""
-        log_dir = Path(temp_dir) / '.pmo' / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        manager = LogManager(log_dir)
-        
-        # 模拟当前时间
-        with patch('time.strftime', return_value='2023-04-21 12:00:00'):
-            # 测试解析没有时间戳的日志行
-            line = "This is a log message without timestamp"
-            timestamp, content = manager._parse_log_line(line)
-            
-            # 验证添加了当前时间戳，内容保持不变
-            assert timestamp == '2023-04-21 12:00:00'
-            assert content == "This is a log message without timestamp"
     
     def test_flush_logs_for_running_service(self, temp_dir):
         """UT-LOG-004: 清空正在运行的服务日志"""
@@ -217,21 +184,26 @@ class TestLogManager:
         manager = LogManager(log_dir)
         
         # 使用mock捕获输出
-        with patch('pmo.logs.console.print') as mock_print, \
-             patch('time.strftime', return_value='2023-04-21 12:30:00'):
-            
+        with patch('pmo.logs.console.print') as mock_print:
+
             # 显示所有日志
             manager._display_recent_logs(
                 [('multiline-service', 'stdout', log_file, '0')], 10
             )
-            
+
             # 验证显示了全部4行
             calls = [str(call) for call in mock_print.call_args_list]
             assert len([c for c in calls if 'multiline-service' in c]) >= 4
-            
+
             # 验证正确处理了有无时间戳的情况
-            assert any("2023-04-21 12:00:00" in call and "Start of multi-line entry" in call for call in calls)
-            assert any("2023-04-21 12:30:00" in call and "Line 2 without timestamp" in call for call in calls)
+            assert any(
+                "2023-04-21 12:00:00" in call and "Start of multi-line entry" in call
+                for call in calls
+            )
+            assert any(
+                "Line 2 without timestamp" in call and "2023-04-21" not in call
+                for call in calls
+            )
     
     def test_log_large_file_behavior(self, temp_dir):
         """UT-LOG-010: 大日志文件处理行为"""
@@ -260,30 +232,6 @@ class TestLogManager:
             
             # 应该只显示了默认行数
             assert len(log_lines) <= manager.default_tail_lines + 5  # 允许一些额外的输出行
-    
-    def test_parse_various_timestamp_formats(self, temp_dir):
-        """UT-LOG-011: 解析各种时间戳格式"""
-        log_dir = Path(temp_dir) / '.pmo' / 'logs'
-        log_dir.mkdir(parents=True, exist_ok=True)
-        manager = LogManager(log_dir)
-        
-        # 只测试LogManager._parse_log_line当前支持的标准格式
-        # 标准格式测试用例
-        line = "2023-04-21 12:34:56 Standard format"
-        timestamp, content = manager._parse_log_line(line)
-        
-        # 验证时间戳和内容符合预期
-        assert timestamp == "2023-04-21 12:34:56"
-        assert content == "Standard format"
-        
-        # 无时间戳测试用例
-        with patch('time.strftime', return_value='2023-04-21 12:00:00'):
-            line = "Message without timestamp"
-            timestamp, content = manager._parse_log_line(line)
-            
-            # 验证添加了当前时间戳，内容保持不变
-            assert timestamp == "2023-04-21 12:00:00"
-            assert content == "Message without timestamp"
     
     def test_color_output_formatting(self):
         """UT-LOG-012: 颜色输出格式化"""

@@ -61,7 +61,6 @@ The LogManager (`pmo/logs.py`) handles:
 - Real-time log monitoring with formatting
 - Log file management and cleanup
 - Combining multiple log streams for parallel viewing
-- Extracting and displaying timestamps
 
 ### 3. CLI Interface
 
