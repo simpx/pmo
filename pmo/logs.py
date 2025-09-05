@@ -7,7 +7,7 @@ import sys
 import time
 import re
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, IO
 
 from rich.console import Console
 from rich.theme import Theme
@@ -338,35 +338,45 @@ class LogManager:
             self._follow_logs(log_files, hostname)
         else:
             self._display_recent_logs(log_files, lines, hostname)
-    
+
+    def _read_last_lines(self, file: IO[bytes], lines: int) -> List[str]:
+        """Read last N lines from a binary file efficiently."""
+        block_size = 1024
+        file.seek(0, os.SEEK_END)
+        pointer = file.tell()
+        buffer = bytearray()
+
+        while pointer > 0 and buffer.count(b"\n") <= lines:
+            read_size = min(block_size, pointer)
+            pointer -= read_size
+            file.seek(pointer)
+            buffer[:0] = file.read(read_size)
+
+        text = buffer.decode(errors="replace")
+        return text.splitlines()[-lines:]
+
     def _display_recent_logs(self, log_files: List[Tuple[str, str, Path, str]], lines: int, hostname: Optional[str] = None):
         """Display recent log lines"""
         for service, log_type, log_path, service_id in log_files:
-            # PM2-style title
             console.print(f"\n[dim]{log_path} last {lines} lines:[/]")
-            
+
             try:
-                # Read last N lines
-                with open(log_path, 'r') as f:
-                    content = f.readlines()
-                    last_lines = content[-lines:] if len(content) >= lines else content
-                    
-                    # Print each line with service ID, PM2 format
-                    for line in last_lines:
-                        timestamp, message = self._parse_log_line(line)
-                        # 根据日志类型选择样式
-                        if log_type == "merged":
-                            style = "stdout_service"  # 合并日志使用stdout样式
-                        else:
-                            style = "stderr_service" if log_type == "stderr" else "stdout_service"
-                        # Use Text object to avoid Rich markup parsing in message content
-                        text = Text()
-                        text.append(f"{service_id} | ")
-                        if hostname:
-                            text.append(f"{hostname}:")
-                        text.append(service, style=style)
-                        text.append(f" | {timestamp}: {message}")
-                        console.print(text)
+                with open(log_path, "rb") as f:
+                    last_lines = self._read_last_lines(f, lines)
+
+                for line in last_lines:
+                    timestamp, message = self._parse_log_line(line)
+                    if log_type == "merged":
+                        style = "stdout_service"
+                    else:
+                        style = "stderr_service" if log_type == "stderr" else "stdout_service"
+                    text = Text()
+                    text.append(f"{service_id} | ")
+                    if hostname:
+                        text.append(f"{hostname}:")
+                    text.append(service, style=style)
+                    text.append(f" | {timestamp}: {message}")
+                    console.print(text)
             except Exception as e:
                 print_error(f"Error reading log file: {str(e)}")
     

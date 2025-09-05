@@ -77,13 +77,16 @@ Output:
 pmo start   [all | service-name | service-id]
 pmo stop    [all | service-name | service-id]
 pmo restart [all | service-name | service-id]
-pmo logs    [all | service-name | service-id]
+pmo logs    [-f] [-n NUM] [all | service-name | service-id]
 pmo flush   [all | service-name | service-id]
 pmo dry-run [all | service-name | service-id]
 pmo ls
 pmo status  [all | service-name | service-id]
 
 ```
+
+- `-n NUM` shows the last `NUM` log lines.
+- `-f` follows the log output in real time.
 
 ## Configuration
 

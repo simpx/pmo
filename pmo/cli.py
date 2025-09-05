@@ -72,9 +72,9 @@ def setup_arg_parser() -> argparse.ArgumentParser:
     log_parser = subparsers.add_parser('logs', aliases=['log'], help=f'{Emojis.LOG} View service logs')
     log_parser.add_argument('service', nargs='*', default=['all'],
                           help='Service names or IDs (multiple allowed) or "all" to view all logs')
-    log_parser.add_argument('--no-follow', '-n', action='store_true',
-                          help='Do not follow logs in real-time')
-    log_parser.add_argument('--lines', '-l', type=int, 
+    log_parser.add_argument('-f', '--follow', action='store_true',
+                          help='Follow logs in real-time')
+    log_parser.add_argument('-n', '--lines', '-l', type=int, dest='lines',
                           help='Number of lines to show initially (default: 15 for all services, 30 for specific services)')
     
     # Flush command
@@ -237,7 +237,7 @@ def handle_restart(manager: ServiceManager, service_specs: List[str]) -> bool:
 def handle_log(manager: ServiceManager, log_manager: LogManager, args) -> bool:
     """Handle log command with support for multiple services and remote hostnames"""
     service_specs = args.service
-    follow = not args.no_follow
+    follow = args.follow
     
     # Set default line values based on whether specific services are specified
     if args.lines is None:

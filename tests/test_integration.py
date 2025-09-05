@@ -224,7 +224,7 @@ time.sleep(1)
         # 模拟参数对象
         class Args:
             service = ['test-service']
-            no_follow = True
+            follow = False
             lines = 5
         
         args = Args()
