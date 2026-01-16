@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
 
 [project]
 name = "pmo"
@@ -12,29 +12,27 @@ license = {text = "MIT"}
 authors = [
     {name = "simpxx", email = "simpxx@gmail.com"}
 ]
-keywords = ["command-line", "tool"]
+keywords = ["command-line", "tool", "process-manager"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "freezegun>=1.5.1",
-    "psutil>=7.0.0",
-    "nvidia-ml-py>=12.0.0",
-    "python-dotenv>=1.1.0",
-    "pyyaml>=6.0.2",
-    "rich>=14.0.0",
-]
+# Python dependencies are no longer needed since Rust handles everything
+dependencies = []
 
 [project.scripts]
-pmo = "pmo.cli:main"
+pmo = "pmo:main"
 
-[tool.setuptools.packages.find]
-include = ["pmo*"]
+[tool.maturin]
+features = ["pyo3/extension-module"]
+module-name = "pmo._pmo_rs"
+python-source = "python"
 
 [dependency-groups]
 dev = [
     "pytest>=8.3.5",
     "twine>=6.1.0",
+    "maturin>=1.5,<2.0",
 ]

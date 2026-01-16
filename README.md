@@ -2,6 +2,8 @@
 
 A lightweight process manager inspired by PM2, but designed primarily for development environments.
 
+**Note:** PMO is implemented in Rust for high performance, with Python bindings for easy installation via pip.
+
 ## Features
 
 - `start`, `stop`, and `restart` services, similar to PM2
